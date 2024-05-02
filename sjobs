@@ -30,7 +30,7 @@ AUTHOR="John Snowdon"
 URL="https://github.com/megatron-uk/Simple-Slurm-Tools"
 
 import argparse
-from slurmjob import slurmJob
+from lib.slurmjob import slurmJob
 
 Q_MODE			= ""
 OUT_MODE		= "stats"
