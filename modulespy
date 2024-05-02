@@ -1,0 +1,115 @@
+#!/usr/bin/env python3
+
+"""
+Simple Slurm Tools
+Copyright (C) 2024 John Snowdon
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+"""
+
+###################################################################
+#
+# Search for a given loadable module and recurse through all
+# child dependencies which are found in order to understand
+# the relationship between the loaded software and the software
+# necessary to support it.
+#
+# Dependency chains are **complex**
+#
+####################################################################
+
+AUTHOR="John Snowdon"
+URL="https://github.com/megatron-uk/Simple-Slurm-Tools"
+
+import argparse
+import re
+import subprocess
+
+cache = {}
+cacheresults = {}
+
+def parseModule(moduleName = "", moduleText = ""):
+	""" Extract the load() statements
+	from a 'module show NAME' call. """
+
+	if moduleName in cacheresults.keys():
+		return cacheresults[moduleName]
+	else:
+
+		moreModules = []
+	
+		p = re.compile('^load\(.+')
+		for l in moduleText:
+			if len(l) > 4:
+				l_string = l.decode()
+				results = p.match(l_string)
+				if results:
+					newModule = results.group(0).split('"')[1]
+					print("%s -> %s" % (moduleName, newModule))
+					moreModules.append(newModule)
+
+		cacheresults[moduleName] = moreModules
+		for m in moreModules:
+			output = runModule(m)
+			lines = parseModule(m, output)
+		return moreModules	
+
+
+def runModule(moduleName = ""):
+	""" Run a subprocess to call the module function. """
+
+	jobcmd = "module show %s" % moduleName
+
+	if moduleName in cache.keys():
+		return cache[moduleName]
+	else:
+		p = subprocess.Popen(args=jobcmd, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+
+		if p:
+			output = p.stdout.read().rstrip().split(b'\n')
+			cache[moduleName] = output
+			if len(output) > 0:
+				return output
+			else:
+				return False
+		else:
+			return False
+
+def banner():
+	""" Standard banner """
+	print("modulespy - A loadable module interrogation tool")
+	print("================================================")
+	print("")
+	print("Part of Simple Slurm Tools")
+	print("Author: %s" % AUTHOR)
+	print("URL: %s" % URL)
+	print("")
+
+if __name__ == "__main__":
+	banner()	
+
+	parser = argparse.ArgumentParser("simple_example")
+	parser.add_argument("module_name", help="The name of a loadable module to interrogate.", type=str)
+	args = parser.parse_args()
+
+	if args.module_name:
+		m = args.module_name
+		print("Searching for all dependencies of: %s" % m)
+		output = runModule(m)
+		if output:
+			lines = parseModule(m, output)
+		print("")
+		print("OK")
+	else:
+		print("")

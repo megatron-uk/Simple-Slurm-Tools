@@ -1,0 +1,183 @@
+#!/usr/bin/env python3
+
+"""
+Simple Slurm Tools
+Copyright (C) 2024 John Snowdon
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+"""
+
+
+####################################################################
+#
+# Show a summary of all running slurm jobs (within a queue) and the
+# overall system utilisation (of jobs within that queue).
+#
+####################################################################
+
+AUTHOR="John Snowdon"
+URL="https://github.com/megatron-uk/Simple-Slurm-Tools"
+
+import argparse
+from slurmjob import slurmJob
+
+Q_MODE			= ""
+OUT_MODE		= "stats"
+global_jobs 		= []
+global_pending_jobs 	= []
+
+
+def queue_summary(jobs = [], pending_jobs = []):
+	""" Print the summary for a given queue of jobs """
+
+	print("")
+	
+	TOTAL_JOBS			= len(jobs)
+	TOTAL_JOBS_WAITING	= len(pending_jobs)
+	TOTAL_CORES			= 0
+	TOTAL_CORES_WAITING	= 0
+	TOTAL_USERS			= 0
+	TOTAL_USERS_WAITING	= 0
+	TOTAL_RAM			= 0
+	TOTAL_RAM_WAITING	= 0
+	TOTAL_RUNTIME		= 0
+	TOTAL_PENDING_TIME	= 0
+	LARGEST_JOB_CORES 	= 0 
+	LARGEST_PENDING_CORES = 0
+	LARGEST_JOB_RAM		= 0
+	LARGEST_PENDING_RAM = 0
+	LARGEST_JOB_CORE_RAM = 0
+	LARGEST_PENDING_CORE_RAM = 0
+	LONGEST_JOB			= 0
+	LONGEST_PENDING		= 0
+	AVERAGE_RUNTIME 	= 0
+	AVERAGE_PENDING_TIME = 0
+	AVERAGE_CORES		= 0
+	AVERAGE_PENDING_CORES = 0
+	AVERAGE_RAM			= 0
+	AVERAGE_PENDING_RAM = 0
+	AVERAGE_RAM_CORE	= 0
+	AVERAGE_PENDING_RAM_CORE = 0
+	
+	job_users = []
+	for j in jobs:
+		if j['User'] not in job_users:
+			job_users.append(j['User'])
+	TOTAL_USERS = len(job_users)
+	
+	job_pending_users = []
+	for j in pending_jobs:
+		if j['User'] not in job_pending_users:
+			job_pending_users.append(j['User'])
+	TOTAL_USERS_WAITING = len(job_pending_users)
+	
+	total_ram_core = 0
+	for j in jobs:
+		TOTAL_CORES = TOTAL_CORES + j['AllocCPUS']
+		TOTAL_RAM = TOTAL_RAM + j['TotalMemory']
+		TOTAL_RUNTIME = TOTAL_RUNTIME + j['ElapsedTime']
+		if j['AllocCPUS'] > LARGEST_JOB_CORES:
+			LARGEST_JOB_CORES = j['AllocCPUS']
+		if j['TotalMemory'] > LARGEST_JOB_RAM:
+			LARGEST_JOB_RAM = j['TotalMemory']
+		if j['ElapsedTime'] > LONGEST_JOB:
+			LONGEST_JOB = j['ElapsedTime']
+		if j['MemoryPerCore'] > LARGEST_JOB_CORE_RAM:
+			LARGEST_JOB_CORE_RAM = j['MemoryPerCore']
+		total_ram_core = total_ram_core + j['MemoryPerCore']
+		
+	total_pending_ram_core = 0
+	for j in pending_jobs:
+		TOTAL_CORES_WAITING = TOTAL_CORES_WAITING + j['ReqCPUS']
+		TOTAL_RAM_WAITING = TOTAL_RAM_WAITING + j['TotalMemory']
+		TOTAL_PENDING_TIME = TOTAL_PENDING_TIME + j['SubmitMinutes'] 
+		if j['AllocCPUS'] > LARGEST_PENDING_CORES:
+			LARGEST_PENDING_CORES = j['AllocCPUS']
+		if j['TotalMemory'] > LARGEST_PENDING_RAM:
+			LARGEST_PENDING_RAM = j['TotalMemory']
+		if j['SubmitMinutes'] > LONGEST_PENDING:
+			LONGEST_PENDING = j['SubmitMinutes']
+		if j['MemoryPerCore'] > LARGEST_PENDING_CORE_RAM:
+			LARGEST_PENDING_CORE_RAM = j['MemoryPerCore']
+		total_pending_ram_core = total_pending_ram_core + j['MemoryPerCore']
+		
+	if TOTAL_JOBS > 0:
+		AVERAGE_RUNTIME = TOTAL_RUNTIME / TOTAL_JOBS
+		AVERAGE_CORES = TOTAL_CORES / TOTAL_JOBS
+		AVERAGE_RAM = TOTAL_RAM / TOTAL_JOBS
+		AVERAGE_RAM_CORE = total_ram_core / TOTAL_JOBS
+		
+	if TOTAL_JOBS_WAITING > 0:
+		AVERAGE_PENDING_TIME = TOTAL_PENDING_TIME / TOTAL_JOBS_WAITING
+		AVERAGE_PENDING_CORES = TOTAL_CORES_WAITING / TOTAL_JOBS_WAITING
+		AVERAGE_PENDING_RAM = TOTAL_RAM_WAITING / TOTAL_JOBS_WAITING
+		AVERAGE_PENDING_RAM_CORE = total_pending_ram_core / TOTAL_JOBS_WAITING
+	
+	print("-= Running =-                            -= Pending =-")
+	print("=============                            =============")
+	print("Total users              : %8s      Total users waiting              : %8s" % (TOTAL_USERS, TOTAL_USERS_WAITING))
+	print("Total running jobs       : %8s      Total waiting jobs               : %8s" % (TOTAL_JOBS, TOTAL_JOBS_WAITING))    
+	print("Total allocated cores    : %8s      Total requested cores            : %8s" % (TOTAL_CORES, TOTAL_CORES_WAITING))
+	print("Total allocated memory   : %8s GB   Total requested memory           : %8s GB" % (int(TOTAL_RAM / 1024), int(TOTAL_RAM_WAITING / 1024)))
+	print("Total runtime            : %8s min  Total waiting time               : %8s min" % (int(TOTAL_RUNTIME), int(TOTAL_PENDING_TIME)))
+	print("-")
+	print("Largest job (cores)      : %8s      Largest waiting job (cores)      : %8s" % (LARGEST_JOB_CORES, LARGEST_PENDING_CORES))
+	print("Largest job (memory/job) : %8s GB   Largest waiting job (memory/job) : %8s GB" % (int(LARGEST_JOB_RAM / 1024), int(LARGEST_PENDING_RAM / 1024)))
+	print("Largest job (memory/core): %8s GB   Largest waiting job (memory/core): %8s GB" % (int(LARGEST_JOB_CORE_RAM / 1024), int(LARGEST_PENDING_CORE_RAM / 1024)))
+	print("Longest job runtime      : %8s min  Longest waiting time             : %8s min" % (int(LONGEST_JOB), int(LONGEST_PENDING)))
+	print("-")
+	print("Average job (cores)      : %8s      Average waiting job (cores)      : %8s" % (int(AVERAGE_CORES), int(AVERAGE_PENDING_CORES)))
+	print("Average job (memory/job) : %8s GB   Average waiting job (memory/job) : %8s GB" % (int(AVERAGE_RAM / 1024), int(AVERAGE_PENDING_RAM / 1024)))
+	print("Average job (memory/core): %8s GB   Average waiting job (memory/core): %8s GB" % (int(AVERAGE_RAM_CORE / 1024), int(AVERAGE_PENDING_RAM_CORE / 1024)))
+	print("Average runtime          : %8s min  Average waiting time             : %8s min" % (int(AVERAGE_RUNTIME), int(AVERAGE_PENDING_TIME)))
+
+	
+
+def banner():	
+	print("Slurm System Job Summary")
+	print("==================================")
+	print("")
+	print("Part of Simple Slurm Tools")
+	print("Author: %s" % AUTHOR)
+	print("URL: %s" % URL)
+	print("")
+
+if __name__ == "__main__":
+
+	banner()
+
+	parser = argparse.ArgumentParser("simple_example")
+	parser.add_argument("queue_name", help="The name of a Slurm queue to use.", type=str)
+	args = parser.parse_args()
+
+	if args.queue_name:
+		Q_MODE = [args.queue_name]
+		sj = slurmJob()
+
+		for Q in Q_MODE:
+			print("Please wait, retrieving running data for %s..." % Q)
+			j = sj.getByPartition(partition = Q, state = "R")
+	
+			print("Please wait, retrieving pending data for %s..." % Q)
+			pj = sj.getByPartition(partition = Q, state = "PD")
+
+			# Add to global totals
+			global_jobs += j
+			global_pending_jobs += pj
+	
+		queue_summary(global_jobs, global_pending_jobs)
+		print("")
+		print("OK")
+	else:
+		print("")
