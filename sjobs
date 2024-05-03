@@ -44,47 +44,47 @@ def print_stats(stats = None):
 	""" Prints the stats strings to screen. """
 
 	print("")
-	stext = "-= Running =-                            -= Pending =-"
-	stext += "=============                            ============="
-	stext += ("Total users              : %8s      Total users waiting              : %8s" %
+	stext = "-= Running =-                            -= Pending =-\n"
+	stext += "=============                            =============\n"
+	stext += ("Total users              : %8s      Total users waiting              : %8s\n" %
 		(stats['R']['users'], stats['P']['users']))
 
-	stext += ("Total running jobs       : %8s      Total waiting jobs               : %8s" %
+	stext += ("Total running jobs       : %8s      Total waiting jobs               : %8s\n" %
 		(stats['R']['jobs'], stats['P']['jobs']))
 
-	stext += ("Total allocated cores    : %8s      Total requested cores            : %8s" %
+	stext += ("Total allocated cores    : %8s      Total requested cores            : %8s\n" %
 		(stats['R']['cores']['sum'], stats['P']['cores']['sum']))
 
-	stext += ("Total allocated memory   : %8s GB   Total requested memory           : %8s GB" %
+	stext += ("Total allocated memory   : %8s GB   Total requested memory           : %8s GB\n" %
 		(int(stats['R']['ramjob']['max'] / 1024), int(stats['P']['ramjob']['max'] / 1024)))
 
-	stext += ("Total runtime            : %8s min  Total waiting time               : %8s min" %
+	stext += ("Total runtime            : %8s min  Total waiting time               : %8s min\n" %
 		(int(stats['R']['time']['max']), int(stats['P']['time']['max'])))
 
 	stext += ("-")
-	stext += ("Largest job (cores)      : %8s      Largest waiting job (cores)      : %8s" %
+	stext += ("Largest job (cores)      : %8s      Largest waiting job (cores)      : %8s\n" %
 		(stats['R']['cores']['max'], stats['P']['cores']['max']))
 
-	stext += ("Largest job (memory/job) : %8s GB   Largest waiting job (memory/job) : %8s GB" %
+	stext += ("Largest job (memory/job) : %8s GB   Largest waiting job (memory/job) : %8s GB\n" %
 		(int(stats['R']['ramjob']['max'] / 1024), int(stats['P']['ramjob']['max'] / 1024)))
 
-	stext += ("Largest job (memory/core): %8s GB   Largest waiting job (memory/core): %8s GB" %
+	stext += ("Largest job (memory/core): %8s GB   Largest waiting job (memory/core): %8s GB\n" %
 		(int(stats['R']['ramcore']['max'] / 1024), int(stats['P']['ramcore']['max'] / 1024)))
 
-	stext += ("Longest job runtime      : %8s min  Longest waiting time             : %8s min" %
+	stext += ("Longest job runtime      : %8s min  Longest waiting time             : %8s min\n" %
 		(int(stats['R']['time']['max']), int(stats['P']['time']['max'])))
 
 	stext += ("-")
-	stext += ("Average job (cores)      : %8s      Average waiting job (cores)      : %8s" %
+	stext += ("Average job (cores)      : %8s      Average waiting job (cores)      : %8s\n" %
 		(int(stats['R']['cores']['mean']), int(stats['P']['cores']['mean'])))
 
-	stext += ("Average job (memory/job) : %8s GB   Average waiting job (memory/job) : %8s GB" %
+	stext += ("Average job (memory/job) : %8s GB   Average waiting job (memory/job) : %8s GB\n" %
 		(int(stats['R']['ramjob']['mean'] / 1024), int(stats['P']['ramjob']['mean'] / 1024)))
 
-	stext += ("Average job (memory/core): %8s GB   Average waiting job (memory/core): %8s GB" %
+	stext += ("Average job (memory/core): %8s GB   Average waiting job (memory/core): %8s GB\n" %
 		(int(stats['R']['ramcore']['mean'] / 1024), int(stats['P']['ramcore']['mean'] / 1024)))
 
-	stext += ("Average runtime          : %8s min  Average waiting time             : %8s min" %
+	stext += ("Average runtime          : %8s min  Average waiting time             : %8s min\n" %
 		(int(stats['R']['time']['mean']), int(stats['P']['time']['mean'])))
 
 	print(stext)
