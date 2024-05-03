@@ -207,7 +207,7 @@ def queue_summary(qjobs = None, qpending_jobs = None, out_mode = OUT_MODE):
 
 def banner():
 	""" Text banner """
-	print("Slurm System Job Summary")
+	print("Slurm Simple Job Summary")
 	print("==================================")
 	print("")
 	print("Part of Simple Slurm Tools")
@@ -242,7 +242,7 @@ if __name__ == "__main__":
 			# Jobs in the queue in pending state
 			if OUT_MODE != "csv":
 				print(f"Please wait, retrieving pending data for {queue}...")
-			pj = sj.get_bypartition(partition = queue, state = "PD")
+			pj = sj.get_bypartition(partition = queue, state = "P")
 
 			# Add to global totals
 			global_jobs += rj
