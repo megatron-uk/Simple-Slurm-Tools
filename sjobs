@@ -119,10 +119,12 @@ def queue_summary(qjobs = None, qpending_jobs = None, out_mode = OUT_MODE):
 				'mean' 	: 0,
 			},
 			'ramcore' : {
+				'sum'	: 0,
 				'max' 	: 0,
 				'mean' 	: 0,
 			},
 			'ramjob' : {
+				'sum'	: 0,
 				'max' 	: 0,
 				'mean' 	: 0,
 			},
