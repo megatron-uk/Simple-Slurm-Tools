@@ -132,6 +132,7 @@ def queue_summary(qjobs = None, qpending_jobs = None, out_mode = OUT_MODE):
 			# Update totals for cores, ram and runtime
 			stats[jobtype]['cores']['sum'] = stats[jobtype]['cores']['sum'] + j['AllocCPUS']
 			stats[jobtype]['ram'] = stats[jobtype]['ram'] + j['TotalMemory']
+			stats[jobtype]['ramjob']['sum'] = stats[jobtype]['ramjob']['sum'] + j['TotalMemory']
 			stats[jobtype]['time']['sum'] = stats[jobtype]['time']['sum'] + j[timefield]
 			stats[jobtype]['ramcore']['sum'] = stats[jobtype]['ramcore']['sum'] + j['MemoryPerCore']
 
@@ -155,10 +156,10 @@ def queue_summary(qjobs = None, qpending_jobs = None, out_mode = OUT_MODE):
 
 	for jobtype in jobtypes:
 		if stats[jobtype]['jobs'] > 0:
-			stats[jobtype]['time']['mean'] = stats[jobtype]['time']['max'] / stats[jobtype]['jobs']
-			stats[jobtype]['cores']['mean'] = stats[jobtype]['cores']['max'] / stats[jobtype]['jobs']
-			stats[jobtype]['ramjob']['mean'] = stats[jobtype]['ramjob']['max'] / stats[jobtype]['jobs']
-			stats[jobtype]['ramcore']['mean'] = stats[jobtype]['ramcore']['max'] / stats[jobtype]['jobs']
+			stats[jobtype]['time']['mean'] = stats[jobtype]['time']['sum'] / stats[jobtype]['jobs']
+			stats[jobtype]['cores']['mean'] = stats[jobtype]['cores']['sum'] / stats[jobtype]['jobs']
+			stats[jobtype]['ramjob']['mean'] = stats[jobtype]['ramjob']['sum'] / stats[jobtype]['jobs']
+			stats[jobtype]['ramcore']['mean'] = stats[jobtype]['ramcore']['sum'] / stats[jobtype]['jobs']
 
 	if out_mode == "stats":
 		print_stats(stats)
