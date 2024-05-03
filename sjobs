@@ -61,7 +61,7 @@ def print_stats(stats = None):
 	stext += ("Total runtime            : %8s min  Total waiting time               : %8s min\n" %
 		(int(stats['R']['time']['max']), int(stats['P']['time']['max'])))
 
-	stext += ("-")
+	stext += ("-\n")
 	stext += ("Largest job (cores)      : %8s      Largest waiting job (cores)      : %8s\n" %
 		(stats['R']['cores']['max'], stats['P']['cores']['max']))
 
@@ -74,7 +74,7 @@ def print_stats(stats = None):
 	stext += ("Longest job runtime      : %8s min  Longest waiting time             : %8s min\n" %
 		(int(stats['R']['time']['max']), int(stats['P']['time']['max'])))
 
-	stext += ("-")
+	stext += ("-\n")
 	stext += ("Average job (cores)      : %8s      Average waiting job (cores)      : %8s\n" %
 		(int(stats['R']['cores']['mean']), int(stats['P']['cores']['mean'])))
 
