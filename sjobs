@@ -103,58 +103,16 @@ def queue_summary(qjobs = None, qpending_jobs = None, out_mode = OUT_MODE):
 	if qpending_jobs:
 		jobs['P'] = qpending_jobs
 
-	stats = {
-		'R' : {
-			'jobs' 	: len(jobs['R']),
-			'users'	: 0,
-			'ram' 	: 0,
-			'cores' : {
-				'sum' 	: 0,
-				'max' 	: 0,
-				'mean' 	: 0,
-			},
-			'time' : {
-				'sum' 	: 0,
-				'max' 	: 0,
-				'mean' 	: 0,
-			},
-			'ramcore' : {
-				'sum'	: 0,
-				'max' 	: 0,
-				'mean' 	: 0,
-			},
-			'ramjob' : {
-				'sum'	: 0,
-				'max' 	: 0,
-				'mean' 	: 0,
-			},
-		},
-		'P' : {
-			'jobs' 	: len(jobs['P']),
-			'users'	: 0,
-			'ram' 	: 0,
-			'cores' : {
-				'sum' 	: 0,
-				'max' 	: 0,
-				'mean' 	: 0,
-			},
-			'time' : {
-				'sum' 	: 0,
-				'max' 	: 0,
-				'mean' 	: 0,
-			},
-			'ramcore' : {
-				'sum'	: 0,
-				'max' 	: 0,
-				'mean' 	: 0,
-			},
-			'ramjob' : {
-				'sum'	: 0,
-				'max' 	: 0,
-				'mean' 	: 0,
-			},
-		},
-	}
+	stats = {}
+	for jobtype in jobtypes:
+		stats[jobtype] = {}
+		stats[jobtype]['jobs'] = len(jobs[jobtype])
+		stats[jobtype]['users'] = 0
+		stats[jobtype]['ram'] = 0
+		stats[jobtype]['cores'] = { 'sum' : 0, 'max' : 0, 'mean' : 0 }
+		stats[jobtype]['time'] = { 'sum' : 0, 'max' : 0, 'mean' : 0 }
+		stats[jobtype]['ramcore'] = { 'sum' : 0, 'max' : 0, 'mean' : 0 }
+		stats[jobtype]['ramjob'] = { 'sum' : 0, 'max' : 0, 'mean' : 0 }
 
 	for jobtype in jobtypes:
 		job_users = []
