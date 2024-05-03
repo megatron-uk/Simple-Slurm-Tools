@@ -56,10 +56,10 @@ def print_stats(stats = None):
 		(stats['R']['cores']['sum'], stats['PD']['cores']['sum']))
 
 	stext += ("Total allocated memory   : %8s GB   Total requested memory           : %8s GB\n" %
-		(int(stats['R']['ramjob']['max'] / 1024), int(stats['PD']['ramjob']['max'] / 1024)))
+		(int(stats['R']['ramjob']['sum'] / 1024), int(stats['PD']['ramjob']['sum'] / 1024)))
 
 	stext += ("Total runtime            : %8s min  Total waiting time               : %8s min\n" %
-		(int(stats['R']['time']['max']), int(stats['PD']['time']['max'])))
+		(int(stats['R']['time']['sum']), int(stats['PD']['time']['sum'])))
 
 	stext += ("-\n")
 	stext += ("Largest job (cores)      : %8s      Largest waiting job (cores)      : %8s\n" %
@@ -94,7 +94,7 @@ def queue_summary(qjobs = None, qpending_jobs = None, out_mode = OUT_MODE):
 
 	jobs = {
 		'R' : [],
-		'P' : [],
+		'PD' : [],
 	}
 
 	if qjobs:
@@ -108,7 +108,6 @@ def queue_summary(qjobs = None, qpending_jobs = None, out_mode = OUT_MODE):
 		stats[jobtype] = {}
 		stats[jobtype]['jobs'] = len(jobs[jobtype])
 		stats[jobtype]['users'] = 0
-		stats[jobtype]['ram'] = 0
 		stats[jobtype]['cores'] = { 'sum' : 0, 'max' : 0, 'mean' : 0 }
 		stats[jobtype]['time'] = { 'sum' : 0, 'max' : 0, 'mean' : 0 }
 		stats[jobtype]['ramcore'] = { 'sum' : 0, 'max' : 0, 'mean' : 0 }
@@ -122,7 +121,7 @@ def queue_summary(qjobs = None, qpending_jobs = None, out_mode = OUT_MODE):
 			if jobtype == 'R':
 				timefield = 'ElapsedTime'
 
-			if jobtype == 'P':
+			if jobtype == 'PD':
 				timefield = 'SubmitMinutes'
 
 			# Count a new unique user
@@ -130,10 +129,9 @@ def queue_summary(qjobs = None, qpending_jobs = None, out_mode = OUT_MODE):
 				job_users.append(j['User'])
 
 			# Update totals for cores, ram and runtime
-			stats[jobtype]['cores']['sum'] = stats[jobtype]['cores']['sum'] + j['AllocCPUS']
-			stats[jobtype]['ram'] = stats[jobtype]['ram'] + j['TotalMemory']
-			stats[jobtype]['ramjob']['sum'] = stats[jobtype]['ramjob']['sum'] + j['TotalMemory']
 			stats[jobtype]['time']['sum'] = stats[jobtype]['time']['sum'] + j[timefield]
+			stats[jobtype]['cores']['sum'] = stats[jobtype]['cores']['sum'] + j['AllocCPUS']S
+			stats[jobtype]['ramjob']['sum'] = stats[jobtype]['ramjob']['sum'] + j['TotalMemory']
 			stats[jobtype]['ramcore']['sum'] = stats[jobtype]['ramcore']['sum'] + j['MemoryPerCore']
 
 			# Update max runtime
