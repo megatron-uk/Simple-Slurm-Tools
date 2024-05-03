@@ -30,7 +30,7 @@ from lib.slurmjob import SlurmJob
 AUTHOR		= "John Snowdon"
 URL			= "https://github.com/megatron-uk/Simple-Slurm-Tools"
 
-jobtypes		= ['R', 'P']
+jobtypes		= ['R', 'PD']
 QUEUES		= []
 OUT_MODE		= "stats"
 global_jobs 	= []
@@ -47,45 +47,45 @@ def print_stats(stats = None):
 	stext = "-= Running =-                            -= Pending =-\n"
 	stext += "=============                            =============\n"
 	stext += ("Total users              : %8s      Total users waiting              : %8s\n" %
-		(stats['R']['users'], stats['P']['users']))
+		(stats['R']['users'], stats['PD']['users']))
 
 	stext += ("Total running jobs       : %8s      Total waiting jobs               : %8s\n" %
-		(stats['R']['jobs'], stats['P']['jobs']))
+		(stats['R']['jobs'], stats['PD']['jobs']))
 
 	stext += ("Total allocated cores    : %8s      Total requested cores            : %8s\n" %
-		(stats['R']['cores']['sum'], stats['P']['cores']['sum']))
+		(stats['R']['cores']['sum'], stats['PD']['cores']['sum']))
 
 	stext += ("Total allocated memory   : %8s GB   Total requested memory           : %8s GB\n" %
-		(int(stats['R']['ramjob']['max'] / 1024), int(stats['P']['ramjob']['max'] / 1024)))
+		(int(stats['R']['ramjob']['max'] / 1024), int(stats['PD']['ramjob']['max'] / 1024)))
 
 	stext += ("Total runtime            : %8s min  Total waiting time               : %8s min\n" %
-		(int(stats['R']['time']['max']), int(stats['P']['time']['max'])))
+		(int(stats['R']['time']['max']), int(stats['PD']['time']['max'])))
 
 	stext += ("-\n")
 	stext += ("Largest job (cores)      : %8s      Largest waiting job (cores)      : %8s\n" %
-		(stats['R']['cores']['max'], stats['P']['cores']['max']))
+		(stats['R']['cores']['max'], stats['PD']['cores']['max']))
 
 	stext += ("Largest job (memory/job) : %8s GB   Largest waiting job (memory/job) : %8s GB\n" %
-		(int(stats['R']['ramjob']['max'] / 1024), int(stats['P']['ramjob']['max'] / 1024)))
+		(int(stats['R']['ramjob']['max'] / 1024), int(stats['PD']['ramjob']['max'] / 1024)))
 
 	stext += ("Largest job (memory/core): %8s GB   Largest waiting job (memory/core): %8s GB\n" %
-		(int(stats['R']['ramcore']['max'] / 1024), int(stats['P']['ramcore']['max'] / 1024)))
+		(int(stats['R']['ramcore']['max'] / 1024), int(stats['PD']['ramcore']['max'] / 1024)))
 
 	stext += ("Longest job runtime      : %8s min  Longest waiting time             : %8s min\n" %
-		(int(stats['R']['time']['max']), int(stats['P']['time']['max'])))
+		(int(stats['R']['time']['max']), int(stats['PD']['time']['max'])))
 
 	stext += ("-\n")
 	stext += ("Average job (cores)      : %8s      Average waiting job (cores)      : %8s\n" %
-		(int(stats['R']['cores']['mean']), int(stats['P']['cores']['mean'])))
+		(int(stats['R']['cores']['mean']), int(stats['PD']['cores']['mean'])))
 
 	stext += ("Average job (memory/job) : %8s GB   Average waiting job (memory/job) : %8s GB\n" %
-		(int(stats['R']['ramjob']['mean'] / 1024), int(stats['P']['ramjob']['mean'] / 1024)))
+		(int(stats['R']['ramjob']['mean'] / 1024), int(stats['PD']['ramjob']['mean'] / 1024)))
 
 	stext += ("Average job (memory/core): %8s GB   Average waiting job (memory/core): %8s GB\n" %
-		(int(stats['R']['ramcore']['mean'] / 1024), int(stats['P']['ramcore']['mean'] / 1024)))
+		(int(stats['R']['ramcore']['mean'] / 1024), int(stats['PD']['ramcore']['mean'] / 1024)))
 
 	stext += ("Average runtime          : %8s min  Average waiting time             : %8s min\n" %
-		(int(stats['R']['time']['mean']), int(stats['P']['time']['mean'])))
+		(int(stats['R']['time']['mean']), int(stats['PD']['time']['mean'])))
 
 	print(stext)
 
@@ -101,7 +101,7 @@ def queue_summary(qjobs = None, qpending_jobs = None, out_mode = OUT_MODE):
 		jobs['R'] = qjobs
 
 	if qpending_jobs:
-		jobs['P'] = qpending_jobs
+		jobs['PD'] = qpending_jobs
 
 	stats = {}
 	for jobtype in jobtypes:
@@ -203,7 +203,7 @@ if __name__ == "__main__":
 			# Jobs in the queue in pending state
 			if OUT_MODE != "csv":
 				print(f"Please wait, retrieving pending data for {queue}...")
-			pj = sj.get_bypartition(partition = queue, state = "P")
+			pj = sj.get_bypartition(partition = queue, state = "PD")
 
 			# Add to global totals
 			global_jobs += rj
