@@ -18,6 +18,10 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
+import traceback
+import subprocess
+import datetime
+
 #############################################################
 #
 # Encapsulation of a Slurm job.
@@ -27,196 +31,206 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 AUTHOR = "John Snowdon"
 URL= "https://github.com/megatron-uk/Simple-Slurm-Tools"
 
-import traceback
-import subprocess
-import datetime
-import time
-
 # Fields retrieved when getting lists of jobs
-FIELDS_SUMMARY = 'User,Account,AllocCPUS,AllocNodes,CPUTimeRaw,Elapsed,JobID,Reserved,NodeList,Partition,Reason,ReqCPUS,ReqMem,ReqNodes,Submit'
+FIELDS_SUMMARY 	= 'User,Account,AllocCPUS,AllocNodes,CPUTimeRaw,Elapsed,JobID,Reserved,\
+NodeList,Partition,Reason,ReqCPUS,ReqMem,ReqNodes,Submit'
+FIELDS_INTEGER 	= ['AllocCPUS', 'AllocNodes', 'ReqCPUS', 'CPUTimeRaw', 'ReqNodes']
+FIELDS_LIST 		= []
+FIELDS 			= 'User,Account,AllocCPUS,AllocNodes,AllocTRES,AssocID,AveCPU,\
+AveCPUFreq,AveDiskRead,AveDiskWrite,AvePages,AveRSS,AveVMSize,BlockID,Cluster,\
+Comment,Constraints,ConsumedEnergy,ConsumedEnergyRaw,CPUTime,CPUTimeRAW,DBIndex,\
+DerivedExitCode,Elapsed,ElapsedRaw,Eligible,End,ExitCode,Flags,GID,Group,JobID,\
+JobIDRaw,JobName,Layout,MaxDiskRead,MaxDiskReadNode,MaxDiskReadTask,MaxDiskWrite,\
+MaxDiskWriteNode,MaxDiskWriteTask,MaxPages,MaxPagesNode,MaxPagesTask,MaxRSS,MaxRSSNode,\
+MaxRSSTask,MaxVMSize,MaxVMSizeNode,MaxVMSizeTask,McsLabel,MinCPU,MinCPUNode,MinCPUTask,\
+NCPUS,NNodes,NodeList,NTasks,Priority,Partition,QOS,QOSRAW,Reason,ReqCPUFreq,\
+ReqCPUFreqMin,ReqCPUFreqMax,ReqCPUFreqGov,ReqCPUS,ReqMem,ReqNodes,ReqTRES,Reservation,\
+ReservationId,Reserved,ResvCPU,ResvCPURAW,Start,State,Submit,Suspended,SystemCPU,\
+SystemComment,Timelimit,TimelimitRaw,TotalCPU,TRESUsageInAve,TRESUsageInMax,\
+TRESUsageInMaxNode,TRESUsageInMaxTask,TRESUsageInMin,TRESUsageInMinNode,\
+TRESUsageInMinTask,TRESUsageInTot,TRESUsageOutAve,TRESUsageOutMax,TRESUsageOutMaxNode,\
+TRESUsageOutMaxTask,TRESUsageOutMin,TRESUsageOutMinNode,TRESUsageOutMinTask,\
+TRESUsageOutTot,UID,User,UserCPU,WCKey,WCKeyID,WorkDir'
+FAIL_STATES 		= 'CA,DL,F,NF,PR,RS,RV,TO,OOM'
 
-# Fields which should be cast to an integer type
-FIELDS_INTEGER = ['AllocCPUS', 'AllocNodes', 'ReqCPUS', 'CPUTimeRaw', 'ReqNodes']
+class SlurmJob():
+	""" Class with methods for working with slurm job details from sacct and scontrol """
 
-# Fields to convert into an array
-FIELDS_LIST = []
-
-# Fields retrieved when getting details on a single job
-FIELDS = 'User,Account,AllocCPUS,AllocNodes,AllocTRES,AssocID,AveCPU,AveCPUFreq,AveDiskRead,AveDiskWrite,AvePages,AveRSS,AveVMSize,BlockID,Cluster,Comment,Constraints,ConsumedEnergy,ConsumedEnergyRaw,CPUTime,CPUTimeRAW,DBIndex,DerivedExitCode,Elapsed,ElapsedRaw,Eligible,End,ExitCode,Flags,GID,Group,JobID,JobIDRaw,JobName,Layout,MaxDiskRead,MaxDiskReadNode,MaxDiskReadTask,MaxDiskWrite,MaxDiskWriteNode,MaxDiskWriteTask,MaxPages,MaxPagesNode,MaxPagesTask,MaxRSS,MaxRSSNode,MaxRSSTask,MaxVMSize,MaxVMSizeNode,MaxVMSizeTask,McsLabel,MinCPU,MinCPUNode,MinCPUTask,NCPUS,NNodes,NodeList,NTasks,Priority,Partition,QOS,QOSRAW,Reason,ReqCPUFreq,ReqCPUFreqMin,ReqCPUFreqMax,ReqCPUFreqGov,ReqCPUS,ReqMem,ReqNodes,ReqTRES,Reservation,ReservationId,Reserved,ResvCPU,ResvCPURAW,Start,State,Submit,Suspended,SystemCPU,SystemComment,Timelimit,TimelimitRaw,TotalCPU,TRESUsageInAve,TRESUsageInMax,TRESUsageInMaxNode,TRESUsageInMaxTask,TRESUsageInMin,TRESUsageInMinNode,TRESUsageInMinTask,TRESUsageInTot,TRESUsageOutAve,TRESUsageOutMax,TRESUsageOutMaxNode,TRESUsageOutMaxTask,TRESUsageOutMin,TRESUsageOutMinNode,TRESUsageOutMinTask,TRESUsageOutTot,UID,User,UserCPU,WCKey,WCKeyID,WorkDir'
-
-FAIL_STATES = 'CA,DL,F,NF,PR,RS,RV,TO,OOM'
-
-class slurmJob():
-	
 	def __init__(self, debug = False):
 		self.job = {}
+		self.job_id = None
 		self.subjobs = []
 		self.debug = debug
-	
+
 		self.hostname_cache = {}
-	
-	def expandnodelist(self, nodelist = None):
+
+	def expand_nodelist(self, nodelist = None):
 		""" Expand a slurm nodelist into discrete hostnames """
-		
+
 		expanded_list = []
-		
-		job_cmd = "scontrol show hostname %s" % nodelist
-		
+
+		job_cmd = f"scontrol show hostname {nodelist}"
+
 		try:
-			
+
 			if nodelist in self.hostname_cache:
 				return self.hostname_cache[nodelist]
-			
-			p = subprocess.Popen(job_cmd, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-			if p:
-				output = p.stdout.read().rstrip().split(b'\n')
+
+			process = subprocess.Popen(job_cmd, shell=True,
+				stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+				stderr=subprocess.STDOUT)
+			if process:
+				output = process.stdout.read().rstrip().split(b'\n')
 				if len(output) > 0:
 					for hostname in output:
 						expanded_list.append(hostname.decode())
 					self.hostname_cache[nodelist] = expanded_list
 			else:
 				return False
-		except Exception as e:
-			print("Exception making subprocess call for job state %s" % state)
-			print("Exception was %s" % e)
+		except Exception as error:
+			print(f"Exception making subprocess call to expand node list [{job_cmd}]")
+			print(f"Exception was {error}")
 			return False
-		
+
 		return expanded_list
-	
-	def fieldToDatetime(self, field = ""):
+
+	def field_to_datetime(self, field = ""):
 		""" Turn a string field from slurm into a python datetime object """
-		
+
 		days = 0
 		hours = 0
 		minutes = 0
 		seconds = 0
 		if len(field) > 0:
 			if '-' in field:
+				# DD-HH:MM:SS
 				days = int(field.split('-')[0])
 				hours = int((field.split('-')[1]).split(':')[0])
 				minutes = int((field.split('-')[1]).split(':')[1])
 				seconds = int((field.split('-')[1]).split(':')[2])
 			else:
+				# HH:MM:SS
 				hours = int(field.split(':')[0])
 				minutes = int(field.split(':')[1])
 				seconds = int(field.split(':')[2])
-				
-		d = datetime.timedelta(days = days, hours = hours, minutes = minutes, seconds = seconds)
-		return d
-	
-	def getMemoryPerCore(self, reqmem = 0, cpus = 0, reqnodes = 0, allocnodes = 0):
+
+		data = datetime.timedelta(days = days, hours = hours, minutes = minutes, seconds = seconds)
+		return data
+
+	def get_memorypercore(self, reqmem = 0, cpus = 0, reqnodes = 0, allocnodes = 0):
 		""" Generate the memory-per-core metric """
-		
-		d = 0
-		
-		if 'c' in reqmem:			
+
+		data = 0
+
+		if 'c' in reqmem:
 			if 'M' in reqmem:
-				d = int(float(reqmem.split('M')[0])) 
-				
+				data = int(float(reqmem.split('M')[0]))
+
 			if 'G' in reqmem:
-				d = int(float(reqmem.split('G')[0])) * 1024
-			
+				data = int(float(reqmem.split('G')[0])) * 1024
+
 			if 'T' in reqmem:
-				d = int(float(reqmem.split('T')[0])) * 1024 * 1024			
-			return d
-			
+				data = int(float(reqmem.split('T')[0])) * 1024 * 1024
+			return data
+
 		if 'n' in reqmem:
-				
 			if allocnodes != 0:
-				Nodes = allocnodes
+				nodes = allocnodes
 			else:
-				Nodes = reqnodes
-				
+				nodes = reqnodes
+
 			if 'M' in reqmem:
-				d = int(float(reqmem.split('M')[0])) / (cpus / Nodes) 
-				
+				data = int(float(reqmem.split('M')[0])) / (cpus / nodes)
+
 			if 'G' in reqmem:
-				d = (int(float(reqmem.split('G')[0])) * 1024) / (cpus / Nodes)
-			
+				data = (int(float(reqmem.split('G')[0])) * 1024) / (cpus / nodes)
+
 			if 'T' in reqmem:
-				d = (int(float(reqmem.split('T')[0])) * 1024 * 1024) / (cpus / Nodes)			
-			
-		return d
-	
-	def setrowSummary(self, stdout = None, expand_nodes = False):
+				data = (int(float(reqmem.split('T')[0])) * 1024 * 1024) / (cpus / nodes)
+
+		return data
+
+	def set_rowsummary(self, stdout = None, expand_nodes = False):
 		""" Takes one row of job summary text from an sacct call
 		and maps the columns to dictionary keys.
 		Returns the dictionary containing the job fields """
-		
+
 		try:
-			
-			d = {}
-			d['MemoryPerCore'] = 0
+
+			data = {}
+			data['MemoryPerCore'] = 0
 			idx = 0
 			stdout_decoded = stdout.decode().split('|')
 			for fieldname in FIELDS_SUMMARY.split(','):
-				d[fieldname] = stdout_decoded[idx]
+				data[fieldname] = stdout_decoded[idx]
 				if fieldname in FIELDS_INTEGER:
-					d[fieldname] = int(d[fieldname])
+					data[fieldname] = int(data[fieldname])
 				if fieldname in FIELDS_LIST:
-					d[fieldname] = d[fieldname].split(',')
+					data[fieldname] = data[fieldname].split(',')
 				idx += 1
-			
+
 			# Memory is a special case, as it is not reported in a standard way
 			# We could have a memory per core figure '2500Mc', '4Gc', etc.
 			# OR
 			# We could have a memory per node figure '4000Mn', '32Gn', etc.
 			# We need to normalise both cases so that all jobs can be reported
 			# in the same way.
-			CPUS = 0
-			if d['AllocCPUS'] != 0:
-				CPUS = d['AllocCPUS']
+			cpus = 0
+			if data['AllocCPUS'] != 0:
+				cpus = data['AllocCPUS']
 			else:
-				CPUS = d['ReqCPUS']
-				
-			d['MemoryPerCore'] = self.getMemoryPerCore(d['ReqMem'], CPUS, d['ReqNodes'], d['AllocNodes'])			
-			d['TotalMemory'] = CPUS * d['MemoryPerCore']
-	
-			if expand_nodes:
-				d['NodeList'] = self.expandnodelist(nodelist = d['NodeList'])
+				cpus = data['ReqCPUS']
 
-			d['ReservedTime'] = self.fieldToDatetime(field = d['Reserved']).total_seconds() / 60
-			d['ElapsedTime'] = self.fieldToDatetime(field = d['Elapsed']).total_seconds() / 60
-						
+			data['MemoryPerCore'] = self.get_memorypercore(data['ReqMem'],
+				cpus,
+				data['ReqNodes'],
+				data['AllocNodes'])
+			data['TotalMemory'] = cpus * data['MemoryPerCore']
+
+			if expand_nodes:
+				data['NodeList'] = self.expand_nodelist(nodelist = data['NodeList'])
+
+			data['ReservedTime'] = self.field_to_datetime(field = data['Reserved']).total_seconds() / 60
+			data['ElapsedTime'] = self.field_to_datetime(field = data['Elapsed']).total_seconds() / 60
+
 			# Also generate a 'minutes prior to now' field based on the submission date/time field
-			submitdatetime = datetime.datetime.strptime(d['Submit'], '%Y-%m-%dT%H:%M:%S')
-			d['SubmitMinutes'] = (datetime.datetime.now() - submitdatetime).seconds / 60
-			
-		except Exception as e:
+			submitdatetime = datetime.datetime.strptime(data['Submit'], '%Y-%m-%dT%H:%M:%S')
+			data['SubmitMinutes'] = (datetime.datetime.now() - submitdatetime).seconds / 60
+
+		except Exception as error:
 			print("Exception while mapping job data!")
-			print("Exception was: %s" % e)
+			print(f"Exception was {error}")
 			print(traceback.format_exc())
 			print("")
-			if 'JobID' in d:
-				print("The above entry for job [%s] will be IGNORED..." % d['JobID'])
+			if 'JobID' in data:
+				print(f"The above entry for job [{data['JobID']}] will be IGNORED...")
 			else:
 				print("The above entry will be IGNORED...")
-			
+
 			return False
 
-		return d
+		return data
 
-	
 	def setrow(self, row = 0, stdout = None):
 		""" Takes one row of text output from an sacct call and maps
-		the columns to dictionary keys
-		If the 'row' value is set to other than 0, then the dictionary 
+		the columns to dictionary keys.
+		If the 'row' value is set to other than 0, then the dictionary
 		is added as a job sub-component entry. """
-	
-		d = {}
-		d['MemoryPerCore'] = 0
+
+		data = {}
+		data['MemoryPerCore'] = 0
 		idx = 0
 
 		# Split the string into fields based on the list of entries
 		# we requested in the FIELDS variable
 		for fieldname in FIELDS.split(','):
-			d[fieldname] = stdout.decode().split('|')[idx]
+			data[fieldname] = stdout.decode().split('|')[idx]
 			if fieldname in FIELDS_INTEGER:
-				d[fieldname] = int(d[fieldname])	
+				data[fieldname] = int(data[fieldname])
 			if fieldname in FIELDS_LIST:
-				d[fieldname] = d[fieldname].split(',')
-			idx += 1	
-			
+				data[fieldname] = data[fieldname].split(',')
+			idx += 1
+
 		# Memory is a special case, as it is not reported in a standard way
 		# We could have a memory per core figure '2500Mc', '4Gc', etc.
 		# OR
@@ -224,133 +238,110 @@ class slurmJob():
 		# We need to normalise both cases so that all jobs can be reported
 		# in the same way.
 		if row == 0:
-			
-			CPUS = 0
-			if d['AllocCPUS'] != 0:
-				CPUS = d['AllocCPUS']
+
+			cpus = 0
+			if data['AllocCPUS'] != 0:
+				cpus = data['AllocCPUS']
 			else:
-				CPUS = d['ReqCPUS']
-				
-			d['NodeList'] = self.expandnodelist(nodelist = d['NodeList'])
-			d['MemoryPerCore'] = self.getMemoryPerCore(d['ReqMem'], CPUS, d['ReqNodes'], d['AllocNodes'])	
-			d['TotalMemory'] = CPUS * d['MemoryPerCore']
+				cpus = data['ReqCPUS']
+
+			data['NodeList'] = self.expand_nodelist(nodelist = data['NodeList'])
+			data['MemoryPerCore'] = self.get_memorypercore(data['ReqMem'],
+				cpus, data['ReqNodes'],
+				data['AllocNodes'])
+			data['TotalMemory'] = cpus * data['MemoryPerCore']
 
 		# Reserved and Elapsed time are also in a non-standard field type of
 		# D-HH:MM:SS
 		# This needs to be transformed into an object we can tally with others
 		if row == 0:
-			d['ReservedTime'] = self.fieldToDatetime(field = d['Reserved']).total_seconds() / 60
-			d['ElapsedTime'] = self.fieldToDatetime(field = d['Elapsed']).total_seconds() / 60
+			data['ReservedTime'] = self.field_to_datetime(field = data['Reserved']).total_seconds() / 60
+			data['ElapsedTime'] = self.field_to_datetime(field = data['Elapsed']).total_seconds() / 60
 
 		if row == 0:
 			# If this is the first row of an sacct output, set it as
 			# the 'leader' job entry
-			self.job = d
-			
+			self.job = data
+
 		else:
 			# Otherwise record this as a component of the the job
-			self.subjobs.append(d)
-	
-	def getByState(self, state = None, start = None, end = None, expand_nodes = False):
+			self.subjobs.append(data)
+
+	def get_by(self, job_cmd = "", expand_nodes = False):
+		""" Get job data """
+
+		try:
+			jobs = []
+			process = subprocess.Popen(job_cmd, shell=True,
+				stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+				stderr=subprocess.STDOUT)
+			if process:
+				output = process.stdout.read().split(b'\n')
+				if len(output) > 3:
+					for line in output[1:-1]:
+						outdata = self.set_rowsummary(stdout = line, expand_nodes = expand_nodes)
+						if outdata:
+							jobs.append(outdata)
+			else:
+				return False
+		except Exception as error:
+			print(f"Exception making subprocess call for job cmd [{job_cmd}]")
+			print(f"Exception was {error}")
+			print(traceback.format_exc())
+			return False
+
+		return jobs
+
+	def get_bystate(self, state = None, start = None, end = None, expand_nodes = False):
 		""" Return all of the jobs in a given state across all partitions """
-		
+
 		# If looking for failed jobs, expand the criteria to all 'abnormal' codes
 		if state == 'F':
 			state = FAIL_STATES
-			
 		if start and end:
-			job_cmd = "sacct -X -p -a -S %s -E %s --state=%s --format=%s" % (start, end, state, FIELDS_SUMMARY)
+			job_cmd = f"sacct -X -p -a -S {start} -E {end} --state={state} --format={FIELDS_SUMMARY}"
 		else:
-			job_cmd = "sacct -X -p -a --state=%s --format=%s" % (state, FIELDS_SUMMARY)
-		jobs = []
-		try:
-			p = subprocess.Popen(job_cmd, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-			if p:
-				output = p.stdout.read().split(b'\n')
-				if len(output) > 3:
-					for line in output[1:-1]:
-						o = self.setrowSummary(stdout = line, expand_nodes = expand_nodes)
-						if o:
-							jobs.append(o)
-			else:
-				return False
-		except Exception as e:
-			print("Exception making subprocess call for job state %s" % state)
-			print("Exception was %s" % e)
-			print(traceback.format_exc())
-			return False
-			
+			job_cmd = f"sacct -X -p -a --state={state} --format={FIELDS_SUMMARY}"
+		jobs = self.get_by(job_cmd, expand_nodes)
 		return jobs
 
-	def getByNode(self, hostname = None, expand_nodes = False):
+	def get_bynode(self, hostname = None, expand_nodes = False):
 		""" Return all of the jobs currently on a given node """
-		
-		job_cmd = "sacct -X -p -a --nodelist=%s --state=R --format=%s" % (hostname, FIELDS_SUMMARY)	
-		jobs = []
-		try:
-			p = subprocess.Popen(job_cmd, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-			if p:
-				output = p.stdout.read().split(b'\n')
-				if len(output) > 3:
-					for line in output[1:-1]:
-						o = self.setrowSummary(stdout = line, expand_nodes = expand_nodes)
-						if o:
-							jobs.append(o)
-			else:
-				return False
-		except Exception as e:
-			print("Exception making subprocess call for jobs on node %s" % hostname)
-			print("Exception was %s" % e)
-			print(traceback.format_exc())
-			return False
 
+		job_cmd = f"sacct -X -p -a --nodelist={hostname} --state=R --format={FIELDS_SUMMARY}"
+		jobs = self.get_by(job_cmd, expand_nodes)
 		return jobs
 
-	def getByPartition(self, partition = None, state = "R", expand_nodes = False):
+	def get_bypartition(self, partition = None, state = "R", expand_nodes = False):
 		""" Return all of the jobs on a given partition with a given slurm state code """
-		
-		job_cmd = "sacct -X -p -a --partition=%s --state=%s --format=%s" % (partition, state, FIELDS_SUMMARY)	
-		jobs = []
-		try:
-			p = subprocess.Popen(job_cmd, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-			if p:
-				output = p.stdout.read().split(b'\n')
-				if len(output) > 3:
-					for line in output[1:-1]:
-						o = self.setrowSummary(stdout = line, expand_nodes = expand_nodes)
-						if o:
-							jobs.append(o)
-			else:
-				return False
-		except Exception as e:
-			print("Exception making subprocess call for jobs on partition %s" % partition)
-			print("Exception was %s" % e)
-			print(traceback.format_exc())
-			return False
 
+		job_cmd = f"sacct -X -p -a --partition={partition} --state={state} --format={FIELDS_SUMMARY}"
+		jobs = self.get_by(job_cmd, expand_nodes)
 		return jobs
-	
-	def get(self, jobid = None):
+
+	def get_details(self, jobid = None):
 		""" Return the top-level information for a specific job - this only
 		returns a single entry, use 'getAll()' to return sub-components """
-		
-		self.JobID = jobid
-		
-		job_cmd = "sacct -p -a -j %d --format=%s" % (jobid, FIELDS)
-	
+
+		self.job_id = jobid
+
+		job_cmd = f"sacct -p -a -j {self.job_id} --format={FIELDS}"
+
 		try:
-			p = subprocess.Popen(job_cmd, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-			if p:
+			process = subprocess.Popen(job_cmd, shell=True,
+				stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+				stderr=subprocess.STDOUT)
+			if process:
 				# Parse stdout
 				# First line are the field headers
 				# Second line are the underline of the column names
 				# Fields are delimited by '|'
-				output = p.stdout.read().split(b'\n')
+				output = process.stdout.read().split(b'\n')
 
 				# One job entry
 				if len(output) == 3:
 					self.setrow(0, output[1])
-					
+
 				# More than one job entry
 				if len(output) > 3:
 					line_number = 1
@@ -363,8 +354,10 @@ class slurmJob():
 
 			else:
 				return False
-		except Exception as e:
-			print("Exception making subprocess call for jobid %d" % jobid)
-			print("Exception was %s" % e)
+		except Exception as error:
+			print(f"Exception making subprocess call for jobid {self.job_id}")
+			print(f"Exception was {error}")
 			print(traceback.format_exc())
 			return False
+
+		return True

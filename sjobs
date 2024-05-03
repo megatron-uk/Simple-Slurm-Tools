@@ -17,7 +17,8 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
-
+import argparse
+from lib.slurmjob import SlurmJob
 
 ####################################################################
 #
@@ -26,158 +27,231 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 ####################################################################
 
-AUTHOR="John Snowdon"
-URL="https://github.com/megatron-uk/Simple-Slurm-Tools"
+AUTHOR		= "John Snowdon"
+URL			= "https://github.com/megatron-uk/Simple-Slurm-Tools"
 
-import argparse
-from lib.slurmjob import slurmJob
-
-Q_MODE			= ""
+jobtypes		= ['R', 'P']
+QUEUES		= []
 OUT_MODE		= "stats"
-global_jobs 		= []
+global_jobs 	= []
 global_pending_jobs 	= []
 
+def print_csv(stats = None):
+	""" Prints the stats as a csv string. """
 
-def queue_summary(jobs = [], pending_jobs = []):
-	""" Print the summary for a given queue of jobs """
+
+def print_stats(stats = None):
+	""" Prints the stats strings to screen. """
 
 	print("")
-	
-	TOTAL_JOBS			= len(jobs)
-	TOTAL_JOBS_WAITING	= len(pending_jobs)
-	TOTAL_CORES			= 0
-	TOTAL_CORES_WAITING	= 0
-	TOTAL_USERS			= 0
-	TOTAL_USERS_WAITING	= 0
-	TOTAL_RAM			= 0
-	TOTAL_RAM_WAITING	= 0
-	TOTAL_RUNTIME		= 0
-	TOTAL_PENDING_TIME	= 0
-	LARGEST_JOB_CORES 	= 0 
-	LARGEST_PENDING_CORES = 0
-	LARGEST_JOB_RAM		= 0
-	LARGEST_PENDING_RAM = 0
-	LARGEST_JOB_CORE_RAM = 0
-	LARGEST_PENDING_CORE_RAM = 0
-	LONGEST_JOB			= 0
-	LONGEST_PENDING		= 0
-	AVERAGE_RUNTIME 	= 0
-	AVERAGE_PENDING_TIME = 0
-	AVERAGE_CORES		= 0
-	AVERAGE_PENDING_CORES = 0
-	AVERAGE_RAM			= 0
-	AVERAGE_PENDING_RAM = 0
-	AVERAGE_RAM_CORE	= 0
-	AVERAGE_PENDING_RAM_CORE = 0
-	
-	job_users = []
-	for j in jobs:
-		if j['User'] not in job_users:
-			job_users.append(j['User'])
-	TOTAL_USERS = len(job_users)
-	
-	job_pending_users = []
-	for j in pending_jobs:
-		if j['User'] not in job_pending_users:
-			job_pending_users.append(j['User'])
-	TOTAL_USERS_WAITING = len(job_pending_users)
-	
-	total_ram_core = 0
-	for j in jobs:
-		TOTAL_CORES = TOTAL_CORES + j['AllocCPUS']
-		TOTAL_RAM = TOTAL_RAM + j['TotalMemory']
-		TOTAL_RUNTIME = TOTAL_RUNTIME + j['ElapsedTime']
-		if j['AllocCPUS'] > LARGEST_JOB_CORES:
-			LARGEST_JOB_CORES = j['AllocCPUS']
-		if j['TotalMemory'] > LARGEST_JOB_RAM:
-			LARGEST_JOB_RAM = j['TotalMemory']
-		if j['ElapsedTime'] > LONGEST_JOB:
-			LONGEST_JOB = j['ElapsedTime']
-		if j['MemoryPerCore'] > LARGEST_JOB_CORE_RAM:
-			LARGEST_JOB_CORE_RAM = j['MemoryPerCore']
-		total_ram_core = total_ram_core + j['MemoryPerCore']
-		
-	total_pending_ram_core = 0
-	for j in pending_jobs:
-		TOTAL_CORES_WAITING = TOTAL_CORES_WAITING + j['ReqCPUS']
-		TOTAL_RAM_WAITING = TOTAL_RAM_WAITING + j['TotalMemory']
-		TOTAL_PENDING_TIME = TOTAL_PENDING_TIME + j['SubmitMinutes'] 
-		if j['AllocCPUS'] > LARGEST_PENDING_CORES:
-			LARGEST_PENDING_CORES = j['AllocCPUS']
-		if j['TotalMemory'] > LARGEST_PENDING_RAM:
-			LARGEST_PENDING_RAM = j['TotalMemory']
-		if j['SubmitMinutes'] > LONGEST_PENDING:
-			LONGEST_PENDING = j['SubmitMinutes']
-		if j['MemoryPerCore'] > LARGEST_PENDING_CORE_RAM:
-			LARGEST_PENDING_CORE_RAM = j['MemoryPerCore']
-		total_pending_ram_core = total_pending_ram_core + j['MemoryPerCore']
-		
-	if TOTAL_JOBS > 0:
-		AVERAGE_RUNTIME = TOTAL_RUNTIME / TOTAL_JOBS
-		AVERAGE_CORES = TOTAL_CORES / TOTAL_JOBS
-		AVERAGE_RAM = TOTAL_RAM / TOTAL_JOBS
-		AVERAGE_RAM_CORE = total_ram_core / TOTAL_JOBS
-		
-	if TOTAL_JOBS_WAITING > 0:
-		AVERAGE_PENDING_TIME = TOTAL_PENDING_TIME / TOTAL_JOBS_WAITING
-		AVERAGE_PENDING_CORES = TOTAL_CORES_WAITING / TOTAL_JOBS_WAITING
-		AVERAGE_PENDING_RAM = TOTAL_RAM_WAITING / TOTAL_JOBS_WAITING
-		AVERAGE_PENDING_RAM_CORE = total_pending_ram_core / TOTAL_JOBS_WAITING
-	
-	print("-= Running =-                            -= Pending =-")
-	print("=============                            =============")
-	print("Total users              : %8s      Total users waiting              : %8s" % (TOTAL_USERS, TOTAL_USERS_WAITING))
-	print("Total running jobs       : %8s      Total waiting jobs               : %8s" % (TOTAL_JOBS, TOTAL_JOBS_WAITING))    
-	print("Total allocated cores    : %8s      Total requested cores            : %8s" % (TOTAL_CORES, TOTAL_CORES_WAITING))
-	print("Total allocated memory   : %8s GB   Total requested memory           : %8s GB" % (int(TOTAL_RAM / 1024), int(TOTAL_RAM_WAITING / 1024)))
-	print("Total runtime            : %8s min  Total waiting time               : %8s min" % (int(TOTAL_RUNTIME), int(TOTAL_PENDING_TIME)))
-	print("-")
-	print("Largest job (cores)      : %8s      Largest waiting job (cores)      : %8s" % (LARGEST_JOB_CORES, LARGEST_PENDING_CORES))
-	print("Largest job (memory/job) : %8s GB   Largest waiting job (memory/job) : %8s GB" % (int(LARGEST_JOB_RAM / 1024), int(LARGEST_PENDING_RAM / 1024)))
-	print("Largest job (memory/core): %8s GB   Largest waiting job (memory/core): %8s GB" % (int(LARGEST_JOB_CORE_RAM / 1024), int(LARGEST_PENDING_CORE_RAM / 1024)))
-	print("Longest job runtime      : %8s min  Longest waiting time             : %8s min" % (int(LONGEST_JOB), int(LONGEST_PENDING)))
-	print("-")
-	print("Average job (cores)      : %8s      Average waiting job (cores)      : %8s" % (int(AVERAGE_CORES), int(AVERAGE_PENDING_CORES)))
-	print("Average job (memory/job) : %8s GB   Average waiting job (memory/job) : %8s GB" % (int(AVERAGE_RAM / 1024), int(AVERAGE_PENDING_RAM / 1024)))
-	print("Average job (memory/core): %8s GB   Average waiting job (memory/core): %8s GB" % (int(AVERAGE_RAM_CORE / 1024), int(AVERAGE_PENDING_RAM_CORE / 1024)))
-	print("Average runtime          : %8s min  Average waiting time             : %8s min" % (int(AVERAGE_RUNTIME), int(AVERAGE_PENDING_TIME)))
+	stext = "-= Running =-                            -= Pending =-"
+	stext += "=============                            ============="
+	stext += ("Total users              : %8s      Total users waiting              : %8s" %
+		(stats['R']['users'], stats['P']['users']))
 
-	
+	stext += ("Total running jobs       : %8s      Total waiting jobs               : %8s" %
+		(stats['R']['jobs'], stats['P']['jobs']))
 
-def banner():	
+	stext += ("Total allocated cores    : %8s      Total requested cores            : %8s" %
+		(stats['R']['cores']['sum'], stats['P']['cores']['sum']))
+
+	stext += ("Total allocated memory   : %8s GB   Total requested memory           : %8s GB" %
+		(int(stats['R']['ramjob']['max'] / 1024), int(stats['P']['ramjob']['max'] / 1024)))
+
+	stext += ("Total runtime            : %8s min  Total waiting time               : %8s min" %
+		(int(stats['R']['time']['max']), int(stats['P']['time']['max'])))
+
+	stext += ("-")
+	stext += ("Largest job (cores)      : %8s      Largest waiting job (cores)      : %8s" %
+		(stats['R']['cores']['max'], stats['P']['cores']['max']))
+
+	stext += ("Largest job (memory/job) : %8s GB   Largest waiting job (memory/job) : %8s GB" %
+		(int(stats['R']['ramjob']['max'] / 1024), int(stats['P']['ramjob']['max'] / 1024)))
+
+	stext += ("Largest job (memory/core): %8s GB   Largest waiting job (memory/core): %8s GB" %
+		(int(stats['R']['ramcore']['max'] / 1024), int(stats['P']['ramcore']['max'] / 1024)))
+
+	stext += ("Longest job runtime      : %8s min  Longest waiting time             : %8s min" %
+		(int(stats['R']['time']['max']), int(stats['P']['time']['max'])))
+
+	stext += ("-")
+	stext += ("Average job (cores)      : %8s      Average waiting job (cores)      : %8s" %
+		(int(stats['R']['cores']['mean']), int(stats['P']['cores']['mean'])))
+
+	stext += ("Average job (memory/job) : %8s GB   Average waiting job (memory/job) : %8s GB" %
+		(int(stats['R']['ramjob']['mean'] / 1024), int(stats['P']['ramjob']['mean'] / 1024)))
+
+	stext += ("Average job (memory/core): %8s GB   Average waiting job (memory/core): %8s GB" %
+		(int(stats['R']['ramcore']['mean'] / 1024), int(stats['P']['ramcore']['mean'] / 1024)))
+
+	stext += ("Average runtime          : %8s min  Average waiting time             : %8s min" %
+		(int(stats['R']['time']['mean']), int(stats['P']['time']['mean'])))
+
+	print(stext)
+
+def queue_summary(qjobs = None, qpending_jobs = None, out_mode = OUT_MODE):
+	""" Print the summary for a given queue of jobs """
+
+	jobs = {
+		'R' : [],
+		'P' : [],
+	}
+
+	if qjobs:
+		jobs['R'] = qjobs
+
+	if qpending_jobs:
+		jobs['P'] = qpending_jobs
+
+	stats = {
+		'R' : {
+			'jobs' 	: len(jobs['R']),
+			'users'	: 0,
+			'ram' 	: 0,
+			'cores' : {
+				'sum' 	: 0,
+				'max' 	: 0,
+				'mean' 	: 0,
+			},
+			'time' : {
+				'sum' 	: 0,
+				'max' 	: 0,
+				'mean' 	: 0,
+			},
+			'ramcore' : {
+				'max' 	: 0,
+				'mean' 	: 0,
+			},
+			'ramjob' : {
+				'max' 	: 0,
+				'mean' 	: 0,
+			},
+		},
+		'P' : {
+			'jobs' 	: len(jobs['P']),
+			'users'	: 0,
+			'ram' 	: 0,
+			'cores' : {
+				'sum' 	: 0,
+				'max' 	: 0,
+				'mean' 	: 0,
+			},
+			'time' : {
+				'sum' 	: 0,
+				'max' 	: 0,
+				'mean' 	: 0,
+			},
+			'ramcore' : {
+				'sum'	: 0,
+				'max' 	: 0,
+				'mean' 	: 0,
+			},
+			'ramjob' : {
+				'sum'	: 0,
+				'max' 	: 0,
+				'mean' 	: 0,
+			},
+		},
+	}
+
+	for jobtype in jobtypes:
+		job_users = []
+		for j in jobs[jobtype]:
+
+			# THe time field differs if it is a running or pending job
+			if jobtype == 'R':
+				timefield = 'ElapsedTime'
+
+			if jobtype == 'P':
+				timefield = 'SubmitMinutes'
+
+			# Count a new unique user
+			if j['User'] not in job_users:
+				job_users.append(j['User'])
+
+			# Update totals for cores, ram and runtime
+			stats[jobtype]['cores']['sum'] = stats[jobtype]['cores']['sum'] + j['AllocCPUS']
+			stats[jobtype]['ram'] = stats[jobtype]['ram'] + j['TotalMemory']
+			stats[jobtype]['time']['sum'] = stats[jobtype]['time']['sum'] + j[timefield]
+			stats[jobtype]['ramcore']['sum'] = stats[jobtype]['ramcore']['sum'] + j['MemoryPerCore']
+
+			# Update max runtime
+			if j[timefield] > stats[jobtype]['time']['max']:
+				stats[jobtype]['time']['max'] = j[timefield]
+
+			# Update max core count
+			if j['AllocCPUS'] > stats[jobtype]['cores']['max']:
+				stats[jobtype]['cores']['max'] = j['AllocCPUS']
+
+			# Update max ram/job count
+			if j['TotalMemory'] > stats[jobtype]['ramjob']['max']:
+				stats[jobtype]['ramjob']['max'] = j['TotalMemory']
+
+			# Update max ram/core count
+			if j['MemoryPerCore'] > stats[jobtype]['ramcore']['max']:
+				stats[jobtype]['ramcore']['max'] = j['MemoryPerCore']
+
+		stats[jobtype]['users'] = len(job_users)
+
+	for jobtype in jobtypes:
+		if stats[jobtype]['jobs'] > 0:
+			stats[jobtype]['time']['mean'] = stats[jobtype]['time']['max'] / stats[jobtype]['jobs']
+			stats[jobtype]['cores']['mean'] = stats[jobtype]['cores']['max'] / stats[jobtype]['jobs']
+			stats[jobtype]['ramjob']['mean'] = stats[jobtype]['ramjob']['max'] / stats[jobtype]['jobs']
+			stats[jobtype]['ramcore']['mean'] = stats[jobtype]['ramcore']['max'] / stats[jobtype]['jobs']
+
+	if out_mode == "stats":
+		print_stats(stats)
+	if out_mode == "csv":
+		print_csv(stats)
+
+def banner():
+	""" Text banner """
 	print("Slurm System Job Summary")
 	print("==================================")
 	print("")
 	print("Part of Simple Slurm Tools")
-	print("Author: %s" % AUTHOR)
-	print("URL: %s" % URL)
+	print(f"Author: {AUTHOR}")
+	print(f"URL: {URL}")
 	print("")
 
 if __name__ == "__main__":
 
-	banner()
-
-	parser = argparse.ArgumentParser("simple_example")
+	parser = argparse.ArgumentParser("sjobs")
 	parser.add_argument("queue_name", help="The name of a Slurm queue to use.", type=str)
+	parser.add_argument("-csv", help="Enable CSV output only.", action="store_true")
 	args = parser.parse_args()
 
-	if args.queue_name:
-		Q_MODE = [args.queue_name]
-		sj = slurmJob()
+	if args.csv:
+		OUT_MODE = "csv"
 
-		for Q in Q_MODE:
-			print("Please wait, retrieving running data for %s..." % Q)
-			j = sj.getByPartition(partition = Q, state = "R")
-	
-			print("Please wait, retrieving pending data for %s..." % Q)
-			pj = sj.getByPartition(partition = Q, state = "PD")
+	if OUT_MODE != "csv":
+		banner()
+
+	if args.queue_name:
+
+		QUEUES.append(args.queue_name)
+		sj = SlurmJob()
+
+		for queue in QUEUES:
+			# Jobs in the queue in running state
+			if OUT_MODE != "csv":
+				print(f"Please wait, retrieving running data for {queue}...")
+			rj = sj.get_bypartition(partition = queue, state = "R")
+
+			# Jobs in the queue in pending state
+			if OUT_MODE != "csv":
+				print(f"Please wait, retrieving pending data for {queue}...")
+			pj = sj.get_bypartition(partition = queue, state = "PD")
 
 			# Add to global totals
-			global_jobs += j
+			global_jobs += rj
 			global_pending_jobs += pj
-	
-		queue_summary(global_jobs, global_pending_jobs)
-		print("")
-		print("OK")
+
+		# Produce the report for the queue
+		queue_summary(global_jobs, global_pending_jobs, OUT_MODE)
+		if OUT_MODE != "csv":
+			print("")
+			print("OK")
 	else:
 		print("")

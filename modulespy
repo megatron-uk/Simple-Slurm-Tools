@@ -18,6 +18,10 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
+import argparse
+import re
+import subprocess
+
 ###################################################################
 #
 # Search for a given loadable module and recurse through all
@@ -32,59 +36,55 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 AUTHOR="John Snowdon"
 URL="https://github.com/megatron-uk/Simple-Slurm-Tools"
 
-import argparse
-import re
-import subprocess
-
 cache = {}
 cacheresults = {}
 
-def parseModule(moduleName = "", moduleText = ""):
-	""" Extract the load() statements
-	from a 'module show NAME' call. """
+def parse_module(module_name = "", module_text = ""):
+	""" Extract the load() statements from a 'module show NAME' call. """
 
-	if moduleName in cacheresults.keys():
-		return cacheresults[moduleName]
-	else:
+	if module_name in cacheresults:
+		return cacheresults[module_name]
 
-		moreModules = []
-	
-		p = re.compile('^load\(.+')
-		for l in moduleText:
-			if len(l) > 4:
-				l_string = l.decode()
-				results = p.match(l_string)
-				if results:
-					newModule = results.group(0).split('"')[1]
-					print("%s -> %s" % (moduleName, newModule))
-					moreModules.append(newModule)
+	found_modules = []
 
-		cacheresults[moduleName] = moreModules
-		for m in moreModules:
-			output = runModule(m)
-			lines = parseModule(m, output)
-		return moreModules	
+	match_prog = re.compile(r'^load\(.+')
+	for line in module_text:
+		if len(line) > 4:
+			l_string = line.decode()
+			results = match_prog.match(l_string)
+			if results:
+				new_module = results.group(0).split('"')[1]
+				print(f"{module_name} -> {new_module}")
+				found_modules.append(new_module)
 
+	cacheresults[module_name] = found_modules
+	for this_module in found_modules:
+		this_output = run_module(this_module)
+		these_lines = parse_module(this_module, this_output)
+		if these_lines:
+			found_modules += these_lines
+	return found_modules
 
-def runModule(moduleName = ""):
+def run_module(module_name = ""):
 	""" Run a subprocess to call the module function. """
 
-	jobcmd = "module show %s" % moduleName
+	jobcmd = f"module show {module_name}"
 
-	if moduleName in cache.keys():
-		return cache[moduleName]
-	else:
-		p = subprocess.Popen(args=jobcmd, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+	if module_name in cache:
+		return cache[module_name]
 
-		if p:
-			output = p.stdout.read().rstrip().split(b'\n')
-			cache[moduleName] = output
-			if len(output) > 0:
-				return output
-			else:
-				return False
-		else:
-			return False
+	process = subprocess.Popen(args=jobcmd,
+		shell=True, stdin=subprocess.PIPE,
+		stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+
+	if process:
+		module_output = process.stdout.read().rstrip().split(b'\n')
+		cache[module_name] = module_output
+		if len(module_output) > 0:
+			return module_output
+		return False
+
+	return False
 
 def banner():
 	""" Standard banner """
@@ -92,12 +92,12 @@ def banner():
 	print("================================================")
 	print("")
 	print("Part of Simple Slurm Tools")
-	print("Author: %s" % AUTHOR)
-	print("URL: %s" % URL)
+	print(f"Author: {AUTHOR}")
+	print(f"URL: {URL}")
 	print("")
 
 if __name__ == "__main__":
-	banner()	
+	banner()
 
 	parser = argparse.ArgumentParser("simple_example")
 	parser.add_argument("module_name", help="The name of a loadable module to interrogate.", type=str)
@@ -105,10 +105,10 @@ if __name__ == "__main__":
 
 	if args.module_name:
 		m = args.module_name
-		print("Searching for all dependencies of: %s" % m)
-		output = runModule(m)
+		print(f"Searching for all dependencies of: {m}")
+		output = run_module(m)
 		if output:
-			lines = parseModule(m, output)
+			lines = parse_module(m, output)
 		print("")
 		print("OK")
 	else:
