@@ -205,7 +205,7 @@ def report_users(dir_name = None, reports = None, out_mode = None):
 		for report in reports:
 			utilisation = 0
 			if report['limit'] > 0:
-				utilisation = int((report['limit'] / report['quota']) * 100)
+				utilisation = int((report['quota'] / report['limit']))
 			report['utilisation'] = utilisation
 		reports_sorted = sorted(reports, key=lambda x: x['quota'])
 		reports_sorted.reverse()
