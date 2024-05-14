@@ -29,7 +29,7 @@ The tool can use either quota to retrieve filesystem utilisation and limit level
 
    * **-nq** No Quota; disables quota-based utilisation calculations and switches on *find* and manual file-size metrics. Slower, but will work for any directory or filesystem tree, including those without quotas enabled
    * **-csv** Data will be output in comma seperated value format
-   * **bygroup** Utilisation will be aggregated by group, rather than user; i.e. you will see totals for a group, the default is to report by individual user
+   * **-bygroup** Utilisation will be aggregated by group, rather than user; i.e. you will see totals for a group, the default is to report by individual user
    * **-users** A comma seperated list of which users to generate a report for
    * **-users_exclude** A comma seperated list of users to exclude from the report
    * **-groups** A comma seperated list of groups to generate the report for
