@@ -100,7 +100,7 @@ def report_by_quota(dir_name = None, users = None, groups = None, by_group = Fal
 							stdin=subprocess.PIPE, stdout=subprocess.PIPE,
 							stderr=subprocess.STDOUT)
 				if process:
-					output = process.stdout.read().rstrip().split(b'\n')
+					output = process.stdout.read()
 					if len(output) > 1:
 						fields = output.decode().split()
 						if len(fields) > 5:
@@ -108,8 +108,13 @@ def report_by_quota(dir_name = None, users = None, groups = None, by_group = Fal
 								'group'		: group,
 								'dirname'	: dir_name,
 								'quota'		: int(fields[2]),
-								'limit'		: int(fields[3])
+								'limit'		: 0
 							}
+							# Handle limit fields which show over-quota status
+							if '*' in fields[3]:
+								data['limit'] = int(fields[3].split('*')[0])
+							else:
+								data['limit'] = int(fields[3])
 							reports.append(data)
 			except Exception as err:
 				print(f"Exception while running group quota command: {job_cmd}")
@@ -122,7 +127,7 @@ def report_by_quota(dir_name = None, users = None, groups = None, by_group = Fal
 							stdin=subprocess.PIPE, stdout=subprocess.PIPE,
 							stderr=subprocess.STDOUT)
 				if process:
-					output = process.stdout.read().rstrip().split(b'\n')
+					output = process.stdout.read()
 					if len(output) > 1:
 						fields = output.decode().split()
 						if len(fields) > 5:
@@ -130,8 +135,13 @@ def report_by_quota(dir_name = None, users = None, groups = None, by_group = Fal
 								'username'	: user,
 								'dirname'	: dir_name,
 								'quota'		: int(fields[2]),
-								'limit'		: int(fields[3])
+								'limit'		: 0
 							}
+							# Handle limit fields which show over-quota status
+							if '*' in fields[3]:
+								data['limit'] = int(fields[3].split('*')[0])
+							else:
+								data['limit'] = int(fields[3])
 							reports.append(data)
 			except Exception as err:
 				print(f"Exception while running user quota command: {job_cmd}")
@@ -195,7 +205,7 @@ def report_users(dir_name = None, reports = None, out_mode = None):
 		for report in reports:
 			utilisation = 0
 			if report['limit'] > 0:
-				utilisation = report['limit'] / report['quota']
+				utilisation = int((report['limit'] / report['quota']) * 100)
 			report['utilisation'] = utilisation
 		reports_sorted = sorted(reports, key=lambda x: x['quota'])
 		reports_sorted.reverse()
