@@ -1,0 +1,297 @@
+#!/usr/bin/env python3
+
+"""
+Simple Slurm Tools
+Copyright (C) 2024 John Snowdon
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+"""
+
+import argparse
+import os
+import subprocess
+import sys
+
+####################################################################
+#
+# Produce a disk utilisation report by user and group for a set
+# of filesystem mount points, using quota and/or du.
+#
+####################################################################
+
+AUTHOR		= "John Snowdon"
+URL			= "https://github.com/megatron-uk/Simple-Slurm-Tools"
+
+OUT_MODE		= "stats"
+FIND_MODE	= "quota"
+DIR_NAME		= "/tmp"
+BY_GROUP		= False
+ALL_USERS_S	= ""
+ALL_GROUPS_S	= ""
+ALL_USERS	= []
+ALL_GROUPS	= []
+
+def banner():
+	""" Text banner """
+	print("diskrep - A disk utilisation report tool")
+	print("========================================")
+	print("")
+	print("Part of Simple Slurm Tools")
+	print(f"Author: {AUTHOR}")
+	print(f"URL: {URL}")
+	print("")
+
+
+def get_groups(groups = None):
+	""" Turn a string of group names into a list of usernames. """
+	groupnames = []
+	for group in groups.split(","):
+		if len(group) > 1:
+			groupnames.append(group.lstrip().rstrip())
+	return groupnames
+
+def get_users(users = None):
+	""" Turn a string of usernames into a list of usernames. """
+	usernames = []
+	for user in users.split(","):
+		if len(user) > 1:
+			usernames.append(user.lstrip().rstrip())
+	return usernames
+
+def get_users_from_groups(groups = []):
+	""" Get a list of usernames from a group list """
+	usernames = []
+	for group in groups:
+		if group:
+			job_cmd = "getent group %s | awk -F: \'{print $4}\'" % group
+			process = subprocess.Popen(job_cmd, shell=True,
+					stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+					stderr=subprocess.STDOUT)
+			if process:
+				output = process.stdout.read().rstrip().split(b'\n')
+				if len(output) > 0:
+					for line in output:
+						users = line.decode().split(",")
+						for user in users:
+							if user not in usernames:
+								usernames.append(user)
+	return usernames
+
+def report_by_quota(dir_name = None, users = None, groups = None, by_group = False):
+	""" Report filesystem use using quota for a given path """
+
+	reports = []
+	if by_group and groups:
+		for group in groups:
+			try:
+				job_cmd = f"quota -g {group} --show-mntpoint -w 2>/dev/null | grep {dir_name}"
+				process = subprocess.Popen(job_cmd, shell=True,
+							stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+							stderr=subprocess.STDOUT)
+				if process:
+					output = process.stdout.read().rstrip().split(b'\n')
+					if len(output) > 1:
+						fields = output.decode().split()
+						if len(fields) > 5:
+							data = {
+								'group'		: group,
+								'dirname'	: dir_name,
+								'quota'		: int(fields[2]),
+								'limit'		: int(fields[3])
+							}
+							reports.append(data)
+			except Exception as err:
+				print(f"Exception while running group quota command: {job_cmd}")
+				print(f"Error was: {err}")
+	if (by_group is False) and users:
+		for user in users:
+			try:
+				job_cmd = f"quota -u {user} --show-mntpoint -w 2>/dev/null | grep {dir_name}"
+				process = subprocess.Popen(job_cmd, shell=True,
+							stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+							stderr=subprocess.STDOUT)
+				if process:
+					output = process.stdout.read().rstrip().split(b'\n')
+					if len(output) > 1:
+						fields = output.decode().split()
+						if len(fields) > 5:
+							data = {
+								'username'	: user,
+								'dirname'	: dir_name,
+								'quota'		: int(fields[2]),
+								'limit'		: int(fields[3])
+							}
+							reports.append(data)
+			except Exception as err:
+				print(f"Exception while running user quota command: {job_cmd}")
+				print(f"Error was: {err}")
+
+	return reports
+
+
+def report_by_find(dir_name = None, users = None, groups = None, by_group = False):
+	""" Report filesystem use using find/du for a given path """
+
+	reports = []
+
+	if by_group and groups:
+		pass
+
+	if (by_group is False) and users:
+		# For every user, find their list of files under this directory path and sum up the usage.
+		for user in users:
+			try:
+				job_cmd = f"find {dir_name} -user {user} 2>/dev/null"
+				process = subprocess.Popen(job_cmd, shell=True,
+							stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+							stderr=subprocess.STDOUT)
+				if process:
+					output = process.stdout.read().rstrip().split(b'\n')
+					if len(output) > 1:
+						found_files_b = output
+						found_files = []
+						for file in found_files_b:
+							found_files.append(file.decode())
+						data = {
+							'username'	: user,
+							'dirname'	: dir_name,
+							'quota'		: 0,
+							'limit'		: 0
+						}
+						for file in found_files:
+							if os.path.exists(file):
+								file_data = os.stat(file)
+								data['quota'] = data['quota'] + file_data.st_size
+							
+						# st_size is in bytes, so store as kbytes
+						if data['quota'] > 1024:
+							data['quota'] = int(data['quota'] / 1024)
+						else:
+							data['quota'] = 0
+						
+						reports.append(data)
+			except Exception as err:
+				print(f"Exception while running user find command: {job_cmd}")
+				print(f"Error was: {err}")
+
+	return reports
+
+def report_users(dir_name = None, reports = None, out_mode = None):
+	""" Sort and print report data by users for a filesystem """
+
+	reports_sorted = []
+	if reports:
+		for report in reports:
+			utilisation = 0
+			if report['limit'] > 0:
+				utilisation = report['limit'] / report['quota']
+			report['utilisation'] = utilisation
+		reports_sorted = sorted(reports, key=lambda x: x['quota'])
+		reports_sorted.reverse()
+
+	if out_mode == "csv":
+		print("filesystem,username,quota_use,quota_limit,utilisation")
+		for report in reports_sorted:
+			utilisation = 0
+			if report['limit'] > 0:
+				utilisation = report['limit'] / report['quota']
+			print(f"{report['dirname']},{report['username']},{report['quota']},{report['limit']},{utilisation}")
+
+	else:
+
+		top_utilisation = {'username' : "", 'dirname' : dir_name, 'quota' : 0, 'limit' : 0, 'utilisation' : 0 }
+		top_quota = {'username' : "", 'dirname' : dir_name, 'quota' : 0, 'limit' : 0, 'utilisation' : 0 }
+		for r in reports:
+			if r['utilisation'] > top_utilisation['utilisation']:
+				top_utilisation = r
+			if r['quota'] > top_quota['quota']:
+				top_quota = r
+
+		print("")
+		print(f"User with highest disk space use	: {top_quota['username']}, {top_quota['quota']} KBytes")
+		print(f"User with highest quota use		: {top_utilisation['username']}, {int(top_utilisation['utilisation'])} %")
+		print("")
+		print("Username            KBytes used        KBytes limit       Quota Utilisation")
+		print("========            ===========        ============       =================")
+		for r in reports_sorted:
+			print(f"{r['username']:14} {r['quota']:16} {r['limit']:19} {r['utilisation']:9}%")
+
+def report_groups(dir_name = None, reports = None, out_mode = None):
+	""" Sort and print report data for a group for a filesystem """
+
+if __name__ == "__main__":
+
+	parser = argparse.ArgumentParser("diskrep")
+	parser.add_argument("dir_name", help="The directory path or filesystem to analyse.", type=str)
+	parser.add_argument("-nq", help="Disable quota, use find/du: this will be slower.",
+		action="store_true")
+	parser.add_argument("-csv", help="Enable CSV output only.", action="store_true")
+	parser.add_argument("-group", help="Report utilisation by group, not user.", action="store_true")
+	parser.add_argument("-users", help="Comma seperated list of users to report.", type=str)
+	parser.add_argument("-groups", help="Comma seperated list of groups to report.", type=str)
+	args = parser.parse_args()
+
+	if args.nq:
+		FIND_MODE = "find"
+
+	if args.csv:
+		OUT_MODE = "csv"
+
+	if OUT_MODE != "csv":
+		banner()
+
+	if args.group:
+		BY_GROUP = True
+
+	if args.users:
+		ALL_USERS_S = args.users
+
+	if args.groups:
+		ALL_GROUPS_S = args.groups
+
+	if args.dir_name:
+		if os.path.exists(args.dir_name):
+			DIR_NAME = args.dir_name
+			users1 = get_users(ALL_USERS_S)
+			ALL_GROUPS = get_groups(ALL_GROUPS_S)
+			users2 = get_users_from_groups(ALL_GROUPS)
+			ALL_USERS = list(set(users1 + users2))
+
+			if OUT_MODE != "csv":
+				print(f"Analysing	: {DIR_NAME}")
+				print(f"Method		: {FIND_MODE}")
+				print(f"Group mode	: {BY_GROUP}")
+				print(f"Users		: {len(ALL_USERS)} users")
+				print(f"Groups		: {len(ALL_GROUPS)} groups")
+
+			if FIND_MODE == "find":
+				reports = report_by_find(DIR_NAME, ALL_USERS, ALL_GROUPS, BY_GROUP)
+				if BY_GROUP:
+					pass
+				else:
+					report_users(DIR_NAME, reports, OUT_MODE)
+
+			if FIND_MODE == "quota":
+				reports = report_by_quota(DIR_NAME, ALL_USERS, ALL_GROUPS, BY_GROUP)
+				if BY_GROUP:
+					pass
+				else:
+					report_users(DIR_NAME, reports, OUT_MODE)
+		else:
+			print(f"ERROR: {args.dir_name} does not exist")
+			sys.exit(1)
+
+	else:
+		print("")
+		sys.exit(0)

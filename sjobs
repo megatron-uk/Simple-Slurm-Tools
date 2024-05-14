@@ -17,7 +17,9 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
+
 import argparse
+import sys
 from lib.slurmjob import SlurmJob
 
 ####################################################################
@@ -130,7 +132,7 @@ def queue_summary(qjobs = None, qpending_jobs = None, out_mode = OUT_MODE):
 
 			# Update totals for cores, ram and runtime
 			stats[jobtype]['time']['sum'] = stats[jobtype]['time']['sum'] + j[timefield]
-			stats[jobtype]['cores']['sum'] = stats[jobtype]['cores']['sum'] + j['AllocCPUS']S
+			stats[jobtype]['cores']['sum'] = stats[jobtype]['cores']['sum'] + j['AllocCPUS']
 			stats[jobtype]['ramjob']['sum'] = stats[jobtype]['ramjob']['sum'] + j['TotalMemory']
 			stats[jobtype]['ramcore']['sum'] = stats[jobtype]['ramcore']['sum'] + j['MemoryPerCore']
 
@@ -212,5 +214,7 @@ if __name__ == "__main__":
 		if OUT_MODE != "csv":
 			print("")
 			print("OK")
+		sys.exit(0)
 	else:
 		print("")
+		sys.exit(0)
