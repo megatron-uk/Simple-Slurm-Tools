@@ -95,11 +95,16 @@ def report_by_quota(dir_name = None, users = None, users_exclude = None, groups 
 	""" Report filesystem use using quota for a given path """
 
 	reports = []
+
+	# Using group-based quotas, and aggregating by group
 	if by_group and groups:
 		for group in groups:
 			if group not in groups_exclude:
 				try:
-					job_cmd = f"quota -g {group} --show-mntpoint -w 2>/dev/null | grep {dir_name}"
+					if FIND_TYPE == "lfs":
+						job_cmd = f"lfs quota -g {group} 2>/dev/null {dir_name} | grep {dir_name}"
+					else:
+						job_cmd = f"quota -g {group} --show-mntpoint -w 2>/dev/null | grep {dir_name}"
 					process = subprocess.Popen(job_cmd, shell=True,
 								stdin=subprocess.PIPE, stdout=subprocess.PIPE,
 								stderr=subprocess.STDOUT)
@@ -111,23 +116,42 @@ def report_by_quota(dir_name = None, users = None, users_exclude = None, groups 
 								data = {
 									'group'		: group,
 									'dirname'	: dir_name,
-									'quota'		: int(fields[2]),
+									'quota'		: 0,
 									'limit'		: 0
 								}
-								# Handle limit fields which show over-quota status
-								if '*' in fields[3]:
-									data['limit'] = int(fields[3].split('*')[0])
+								if FIND_TYPE == "lfs":
+									# Lustre based filesystem quotas
+									QUOTA_FIELD = 1
+									LIMIT_FIELD = 2
 								else:
-									data['limit'] = int(fields[3])
+									# Normal Linux quota subsystem
+									QUOTA_FIELD = 2
+									LIMIT_FIELD = 3
+
+								# Handle quota useage fields which show over-quota status
+								if '*' in fields[QUOTA_FIELD]:
+									data['quota'] = int(fields[QUOTA_FIELD].split('*')[0])
+								else:
+									data['quota'] = int(fields[QUOTA_FIELD])
+								# Handle limit fields which show over-quota status
+								if '*' in fields[LIMIT_FIELD]:
+									data['limit'] = int(fields[LIMIT_FIELD].split('*')[0])
+								else:
+									data['limit'] = int(fields[LIMIT_FIELD])
 								reports.append(data)
 				except Exception as err:
 					print(f"Exception while running group quota command: {job_cmd}")
 					print(f"Error was: {err}")
+
+	# Using user-based quotas, not aggregating by group
 	if (by_group is False) and users:
 		for user in users:
 			if user not in users_exclude:
 				try:
-					job_cmd = f"quota -u {user} --show-mntpoint -w 2>/dev/null | grep {dir_name}"
+					if FIND_TYPE == "lfs":
+						job_cmd = f"lfs quota -u {user} 2>/dev/null {dir_name} | grep {dir_name}"
+					else:
+						job_cmd = f"quota -u {user} --show-mntpoint -w 2>/dev/null | grep {dir_name}"
 					process = subprocess.Popen(job_cmd, shell=True,
 								stdin=subprocess.PIPE, stdout=subprocess.PIPE,
 								stderr=subprocess.STDOUT)
@@ -139,14 +163,29 @@ def report_by_quota(dir_name = None, users = None, users_exclude = None, groups 
 								data = {
 									'username'	: user,
 									'dirname'	: dir_name,
-									'quota'		: int(fields[2]),
+									'quota'		: 0,
 									'limit'		: 0
 								}
-								# Handle limit fields which show over-quota status
-								if '*' in fields[3]:
-									data['limit'] = int(fields[3].split('*')[0])
+								if FIND_TYPE == "lfs":
+									# Lustre based filesystem quotas
+									QUOTA_FIELD = 1
+									LIMIT_FIELD = 2
 								else:
-									data['limit'] = int(fields[3])
+									# Normal Linux quota subsystem
+									QUOTA_FIELD = 2
+									LIMIT_FIELD = 3
+
+								# Handle quota useage fields which show over-quota status
+								if '*' in fields[QUOTA_FIELD]:
+									data['quota'] = int(fields[QUOTA_FIELD].split('*')[0])
+								else:
+									data['quota'] = int(fields[QUOTA_FIELD])
+								# Handle limit fields which show over-quota status
+								if '*' in fields[LIMIT_FIELD]:
+									data['limit'] = int(fields[LIMIT_FIELD].split('*')[0])
+								else:
+									data['limit'] = int(fields[LIMIT_FIELD])
+
 								reports.append(data)
 				except Exception as err:
 					print(f"Exception while running user quota command: {job_cmd}")
@@ -266,7 +305,7 @@ def report_users(dir_name = None, reports = None, out_mode = None):
 		for report in reports:
 			utilisation = 0
 			if report['limit'] > 0:
-				utilisation = int((report['quota'] / report['report']) * 100)
+				utilisation = (report['quota'] / report['limit']) * 100
 			report['utilisation'] = utilisation
 		reports_sorted = sorted(reports, key=lambda x: x['quota'])
 		reports_sorted.reverse()
@@ -281,19 +320,19 @@ def report_users(dir_name = None, reports = None, out_mode = None):
 		top_utilisation = {'username' : "", 'dirname' : dir_name, 'quota' : 0, 'limit' : 0, 'utilisation' : 0 }
 		top_quota = {'username' : "", 'dirname' : dir_name, 'quota' : 0, 'limit' : 0, 'utilisation' : 0 }
 		for r in reports:
-			if r['utilisation'] > top_utilisation['utilisation']:
+			if r['utilisation'] >= top_utilisation['utilisation']:
 				top_utilisation = r
 			if r['quota'] > top_quota['quota']:
 				top_quota = r
 
 		print("")
 		print(f"User with highest disk space use	: {top_quota['username']}, {top_quota['quota']} KBytes")
-		print(f"User with highest quota use		: {top_utilisation['username']}, {int(top_utilisation['utilisation'])} %")
+		print(f"User with highest quota use		: {top_utilisation['username']}, {top_utilisation['utilisation']:.2f} %")
 		print("")
 		print("Username            KBytes used        KBytes limit       Quota Utilisation")
 		print("========            ===========        ============       =================")
 		for r in reports_sorted:
-			print(f"{r['username']:14} {r['quota']:16} {r['limit']:19} {r['utilisation']:9}%")
+			print(f"{r['username']:14} {r['quota']:16} {r['limit']:19} {r['utilisation']:10.2f} %")
 
 def report_groups(dir_name = None, reports = None, out_mode = None):
 	""" Sort and print report data for a group for a filesystem """
@@ -303,7 +342,7 @@ def report_groups(dir_name = None, reports = None, out_mode = None):
 		for report in reports:
 			utilisation = 0
 			if report['limit'] > 0:
-				utilisation = int((report['quota'] / report['report']) * 100)
+				utilisation = (report['quota'] / report['report']) * 100
 			report['utilisation'] = utilisation
 		reports_sorted = sorted(reports, key=lambda x: x['quota'])
 		reports_sorted.reverse()
@@ -311,7 +350,7 @@ def report_groups(dir_name = None, reports = None, out_mode = None):
 	if out_mode == "csv":
 		print("filesystem,group,quota_use,quota_limit,utilisation")
 		for report in reports_sorted:
-			print(f"{report['dirname']},{report['group']},{report['quota']},{report['limit']},{report['utilisation']}")
+			print(f"{report['dirname']},{report['group']},{report['quota']},{report['limit']},{report['utilisation']:.2f}")
 
 	else:
 
@@ -325,12 +364,12 @@ def report_groups(dir_name = None, reports = None, out_mode = None):
 
 		print("")
 		print(f"Group with highest disk space use	: {top_quota['group']}, {top_quota['quota']} KBytes")
-		print(f"Group with highest quota use			: {top_utilisation['group']}, {int(top_utilisation['utilisation'])} %")
+		print(f"Group with highest quota use			: {top_utilisation['group']}, {top_utilisation['utilisation']:.2f} %")
 		print("")
 		print("Group               KBytes used        KBytes limit       Quota Utilisation")
 		print("========            ===========        ============       =================")
 		for r in reports_sorted:
-			print(f"{r['group']:14} {r['quota']:16} {r['limit']:19} {r['utilisation']:9}%")
+			print(f"{r['group']:14} {r['quota']:16} {r['limit']:19} {r['utilisation']:10.2f} %")
 
 if __name__ == "__main__":
 
@@ -344,7 +383,7 @@ if __name__ == "__main__":
 	parser.add_argument("-users_exclude", help="Comma seperated list of users to exclude from the report.", type=str)
 	parser.add_argument("-groups", help="Comma seperated list of groups to report.", type=str)
 	parser.add_argument("-groups_exclude", help="Comma seperated list of groups to exclude from the report.", type=str)
-	parser.add_argument("-lfs", help="Use native Lustre find command.", type=str)
+	parser.add_argument("-lfs", help="Use native Lustre find and quota commands.", action="store_true")
 	args = parser.parse_args()
 
 	reports = []
@@ -366,7 +405,7 @@ if __name__ == "__main__":
 		BY_GROUP = True
 		
 	if args.lfs:
-		for prefix in os.path:
+		for prefix in os.environ['PATH'].split(os.pathsep):
 			filename = os.path.join(prefix, 'lfs')
 			if os.path.exists(filename):
 				FIND_TYPE = "lfs"
@@ -399,7 +438,7 @@ if __name__ == "__main__":
 			if OUT_MODE != "csv":
 				print(f"Analysing	: {DIR_NAME}")
 				print(f"Method		: {FIND_MODE}")
-				print(f"Find type	: {FIND_TYPE}")
+				print(f"FS type		: {FIND_TYPE}")
 				print(f"Group mode	: {BY_GROUP}")
 				print(f"Users		: {len(ALL_USERS)} users / {len(ALL_USERS_EXCLUDE)} excluded")
 				print(f"Groups		: {len(ALL_GROUPS)} groups / {len(ALL_GROUPS_EXCLUDE)} excluded")
@@ -414,7 +453,9 @@ if __name__ == "__main__":
 				report_groups(DIR_NAME, reports, OUT_MODE)
 			else:
 				report_users(DIR_NAME, reports, OUT_MODE)
-			print("OK")
+
+			if OUT_MODE != "csv":
+				print("OK")
 		else:
 			print(f"ERROR: {args.dir_name} does not exist")
 			sys.exit(1)
