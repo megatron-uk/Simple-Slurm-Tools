@@ -23,6 +23,9 @@ import os
 import subprocess
 import sys
 
+from lib.posix import get_users, get_groups, get_users_from_groups
+from lib.posix import get_group_quota, get_group_utilisation
+
 ####################################################################
 #
 # Produce a disk utilisation report by user and group for a set
@@ -55,43 +58,7 @@ def banner():
 	print(f"URL: {URL}")
 	print("")
 
-
-def get_groups(groups = None):
-	""" Turn a string of group names into a list of usernames. """
-	groupnames = []
-	for group in groups.split(","):
-		if len(group) > 1:
-			groupnames.append(group.lstrip().rstrip())
-	return groupnames
-
-def get_users(users = None):
-	""" Turn a string of usernames into a list of usernames. """
-	usernames = []
-	for user in users.split(","):
-		if len(user) > 1:
-			usernames.append(user.lstrip().rstrip())
-	return usernames
-
-def get_users_from_groups(groups = []):
-	""" Get a list of usernames from a group list """
-	usernames = []
-	for group in groups:
-		if group:
-			job_cmd = "getent group %s | awk -F: \'{print $4}\'" % group
-			process = subprocess.Popen(job_cmd, shell=True,
-					stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-					stderr=subprocess.STDOUT)
-			if process:
-				output = process.stdout.read().rstrip().split(b'\n')
-				if len(output) > 0:
-					for line in output:
-						users = line.decode().split(",")
-						for user in users:
-							if user not in usernames:
-								usernames.append(user)
-	return usernames
-
-def report_by_quota(dir_name = None, users = None, users_exclude = None, groups = None, groups_exclude = None, by_group = False):
+def report_by_quota(dir_name = None, users = None, users_exclude = None, groups = None, groups_exclude = None, by_group = False, find_type = FIND_TYPE):
 	""" Report filesystem use using quota for a given path """
 
 	reports = []
@@ -99,97 +66,17 @@ def report_by_quota(dir_name = None, users = None, users_exclude = None, groups 
 	# Using group-based quotas, and aggregating by group
 	if by_group and groups:
 		for group in groups:
-			if group not in groups_exclude:
-				try:
-					if FIND_TYPE == "lfs":
-						job_cmd = f"lfs quota -g {group} 2>/dev/null {dir_name} | grep {dir_name}"
-					else:
-						job_cmd = f"quota -g {group} --show-mntpoint -w 2>/dev/null | grep {dir_name}"
-					process = subprocess.Popen(job_cmd, shell=True,
-								stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-								stderr=subprocess.STDOUT)
-					if process:
-						output = process.stdout.read()
-						if len(output) > 1:
-							fields = output.decode().split()
-							if len(fields) > 5:
-								data = {
-									'group'		: group,
-									'dirname'	: dir_name,
-									'quota'		: 0,
-									'limit'		: 0
-								}
-								if FIND_TYPE == "lfs":
-									# Lustre based filesystem quotas
-									QUOTA_FIELD = 1
-									LIMIT_FIELD = 2
-								else:
-									# Normal Linux quota subsystem
-									QUOTA_FIELD = 2
-									LIMIT_FIELD = 3
-
-								# Handle quota useage fields which show over-quota status
-								if '*' in fields[QUOTA_FIELD]:
-									data['quota'] = int(fields[QUOTA_FIELD].split('*')[0])
-								else:
-									data['quota'] = int(fields[QUOTA_FIELD])
-								# Handle limit fields which show over-quota status
-								if '*' in fields[LIMIT_FIELD]:
-									data['limit'] = int(fields[LIMIT_FIELD].split('*')[0])
-								else:
-									data['limit'] = int(fields[LIMIT_FIELD])
-								reports.append(data)
-				except Exception as err:
-					print(f"Exception while running group quota command: {job_cmd}")
-					print(f"Error was: {err}")
+			data = get_group_quota(FIND_TYPE, group, dir_name)
+			if data:
+				reports.append(data)
 
 	# Using user-based quotas, not aggregating by group
 	if (by_group is False) and users:
 		for user in users:
 			if user not in users_exclude:
-				try:
-					if FIND_TYPE == "lfs":
-						job_cmd = f"lfs quota -u {user} 2>/dev/null {dir_name} | grep {dir_name}"
-					else:
-						job_cmd = f"quota -u {user} --show-mntpoint -w 2>/dev/null | grep {dir_name}"
-					process = subprocess.Popen(job_cmd, shell=True,
-								stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-								stderr=subprocess.STDOUT)
-					if process:
-						output = process.stdout.read()
-						if len(output) > 1:
-							fields = output.decode().split()
-							if len(fields) > 5:
-								data = {
-									'username'	: user,
-									'dirname'	: dir_name,
-									'quota'		: 0,
-									'limit'		: 0
-								}
-								if FIND_TYPE == "lfs":
-									# Lustre based filesystem quotas
-									QUOTA_FIELD = 1
-									LIMIT_FIELD = 2
-								else:
-									# Normal Linux quota subsystem
-									QUOTA_FIELD = 2
-									LIMIT_FIELD = 3
-
-								# Handle quota useage fields which show over-quota status
-								if '*' in fields[QUOTA_FIELD]:
-									data['quota'] = int(fields[QUOTA_FIELD].split('*')[0])
-								else:
-									data['quota'] = int(fields[QUOTA_FIELD])
-								# Handle limit fields which show over-quota status
-								if '*' in fields[LIMIT_FIELD]:
-									data['limit'] = int(fields[LIMIT_FIELD].split('*')[0])
-								else:
-									data['limit'] = int(fields[LIMIT_FIELD])
-
-								reports.append(data)
-				except Exception as err:
-					print(f"Exception while running user quota command: {job_cmd}")
-					print(f"Error was: {err}")
+				data = get_user_quota(FIND_TYPE, user, dir_name)
+				if data:
+					reports.append(data)
 
 	return reports
 
@@ -203,98 +90,17 @@ def report_by_find(dir_name = None, users = None, users_exclude = None, groups =
 		# For every group, find their list of files under this directory path and sum up the usage.
 		for group in groups:
 			if group not in groups_exclude:
-				try:
-					if FIND_TYPE == "generic":
-						job_cmd = f"find {dir_name} -group {group} 2>/dev/null"
-					if FIND_TYPE == "lfs":
-						job_cmd = f"lfs find {dir_name} -group {group} 2>/dev/null"
-	
-					process = subprocess.Popen(job_cmd, shell=True,
-								stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-								stderr=subprocess.STDOUT)
-					if process:
-						output = process.stdout.read().rstrip().split(b'\n')
-						if len(output) > 1:
-							found_files_b = output
-							found_files = []
-							for file in found_files_b:
-								try:
-									found_files.append(file.decode())
-								except Exception as e:
-									# In case any files have names that we cannot decode
-									#print(f"Error, {e}")
-									pass
-							data = {
-								'group'		: group,
-								'dirname'	: dir_name,
-								'quota'		: 0,
-								'limit'		: 0
-							}
-							# Sum the total capacity used by each file
-							for file in found_files:
-								if os.path.exists(file):
-									file_data = os.stat(file)
-									data['quota'] = data['quota'] + file_data.st_size
-								
-							# st_size is in bytes, so store as kbytes
-							if data['quota'] > 1024:
-								data['quota'] = int(data['quota'] / 1024)
-							else:
-								data['quota'] = 0
-							
-							reports.append(data)
-				except Exception as err:
-					print(f"Exception while running group find command: {job_cmd}")
-					print(f"Error was: {err}")
+				data = get_group_utilisation(FIND_TYPE, group, dir_name)
+				if data:
+					reports.append(data)
 
 	if (by_group is False) and users:
 		# For every user, find their list of files under this directory path and sum up the usage.
 		for user in users:
 			if user not in users_exclude:
-				try:
-					if FIND_TYPE == "generic":
-						job_cmd = f"find {dir_name} -user {user} 2>/dev/null"
-					if FIND_TYPE == "lfs":
-						job_cmd = f"lfs find {dir_name} -user {user} 2>/dev/null"
-	
-					process = subprocess.Popen(job_cmd, shell=True,
-								stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-								stderr=subprocess.STDOUT)
-					if process:
-						output = process.stdout.read().rstrip().split(b'\n')
-						if len(output) > 1:
-							found_files_b = output
-							found_files = []
-							for file in found_files_b:
-								try:
-									found_files.append(file.decode())
-								except Exception as e:
-									# In case any files have names that we cannot decode
-									#print(f"Error, {e}")
-									pass
-							data = {
-								'username'	: user,
-								'dirname'	: dir_name,
-								'quota'		: 0,
-								'limit'		: 0
-							}
-							# Sum the total capacity used by each file
-							for file in found_files:
-								if os.path.exists(file):
-									file_data = os.stat(file)
-									data['quota'] = data['quota'] + file_data.st_size
-								
-							# st_size is in bytes, so store as kbytes
-							if data['quota'] > 1024:
-								data['quota'] = int(data['quota'] / 1024)
-							else:
-								data['quota'] = 0
-							
-							reports.append(data)
-				except Exception as err:
-					print(f"Exception while running user find command: {job_cmd}")
-					print(f"Error was: {err}")
-
+				data = get_user_utilisation(FIND_TYPE, user, dir_name)
+				if data:
+					reports.append(data)	
 	return reports
 
 def report_users(dir_name = None, reports = None, out_mode = None):

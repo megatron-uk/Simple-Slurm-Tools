@@ -1,0 +1,151 @@
+#!/usr/bin/env python3
+
+"""
+Simple Slurm Tools
+Copyright (C) 2024 John Snowdon
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+"""
+
+import argparse
+import datetime
+import sys
+from lib.slurmjob import SlurmJob
+
+####################################################################
+#
+# Slurm job history.
+#
+####################################################################
+
+AUTHOR		= "John Snowdon"
+URL			= "https://github.com/megatron-uk/Simple-Slurm-Tools"
+
+jobtypes		= ['R', 'PD']
+QUEUES			= []
+OUT_MODE		= "stats"
+global_jobs 	= []
+global_pending_jobs 	= []
+PERIOD			= "week"
+PERIOD_COUNT	= 1
+
+def banner():
+	""" Text banner """
+	print("Slurm Job Histories")
+	print("==================================")
+	print("")
+	print("Part of Simple Slurm Tools")
+	print(f"Author: {AUTHOR}")
+	print(f"URL: {URL}")
+	print("")
+
+def report_dates(period = "week", count = 1):
+	""" Generate a list of report start/end dates for a given report period type and a count of reports """
+	
+	dates_list = []
+	
+	back_count = 7
+
+	if period == "week":
+		back_count = 7
+	if period == "month":
+		back_count = 30
+	if period == "year":
+		back_count = 365
+
+	now = datetime.datetime.now()
+	for i in range(0, count):
+		d = { 'end' : now }
+		d['start'] = d['end'] - datetime.timedelta(days = back_count)
+		dates_list.append(d)
+		now = d['start']
+		
+	dates_list.reverse()
+	return dates_list
+
+if __name__ == "__main__":
+
+	parser = argparse.ArgumentParser("sjobs")
+	parser.add_argument("-csv", help="Enable CSV output only.", action="store_true")
+	parser.add_argument("-week", help="Reports are in periods of one week.", action="store_true")
+	parser.add_argument("-month", help="Reports are in periods of one month.", action="store_true")
+	parser.add_argument("-year", help="Reports are in periods of one year.", action="store_true")
+	parser.add_argument("-periods", help="Total number of reporting periods to produce history for.", type=int)
+
+	args = parser.parse_args()
+
+	if args.csv:
+		OUT_MODE = "csv"
+
+	if OUT_MODE != "csv":
+		banner()
+
+	if args.week:
+		PERIOD = "week"
+		
+	if args.month:
+		PERIOD = "month"
+		
+	if args.year:
+		PERIOD = "year"
+		
+	if args.periods:
+		PERIOD_COUNT = args.periods
+	else:
+		PERIOD_COUNT = 1
+
+	if OUT_MODE != "csv":
+		print(f"Report period	: {PERIOD}")
+		print(f"Report count	: {PERIOD_COUNT}")
+		print("")
+
+	sj = SlurmJob()
+
+	# Generate the list of start/end dates
+	period_dates = report_dates(period = PERIOD, count = PERIOD_COUNT)
+	
+	period_data = []
+	if OUT_MODE != "csv":
+		print(f"Please wait, starting retrieval of job data...")
+	for d in period_dates:
+		
+		# Produce a report for the given start/end date pair
+		start = f"{d['start'].year}-{d['start'].month:02}-{d['start'].day:02}T00:00:00"
+		end = f"{d['end'].year}-{d['end'].month:02}-{d['end'].day:02}T23:59:59"
+
+		if OUT_MODE != "csv":
+			print(f"Retrieving {PERIOD} data for {start} - {end}")
+		jobs = sj.get_bystate(state = "CD", start = start, end = end, expand_nodes = False)
+		
+		data = {
+			'start' : d['start'],
+			'end' : d['end'],
+			'jobs' : jobs,
+		}
+		
+		period_data.append(data)
+	if OUT_MODE != "csv":
+		print("")
+		print(f"Please wait, analysing job data...")
+
+	# For every report period data returned, process it
+	for data in period_data:
+		print(f"Analysing {len(data['jobs'])} jobs")
+
+	# Produce the report for the queue
+	# TBC
+	if OUT_MODE != "csv":
+		print("")
+		print("OK")
+	sys.exit(0)
