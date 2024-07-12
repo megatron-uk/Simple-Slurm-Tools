@@ -32,13 +32,15 @@ from lib.slurmjob import SlurmJob
 AUTHOR		= "John Snowdon"
 URL			= "https://github.com/megatron-uk/Simple-Slurm-Tools"
 
-jobtypes		= ['R', 'PD']
-QUEUES			= []
-OUT_MODE		= "stats"
-global_jobs 	= []
-global_pending_jobs 	= []
-PERIOD			= "week"
-PERIOD_COUNT	= 1
+jobtype				= 'CD'
+QUEUES				= []
+OUT_MODE				= "stats"
+PERIOD				= "week"
+PERIOD_COUNT			= 1
+CUSTOM_PERCENTILE 	= 75
+REPORT_PERCENTILE	= CUSTOM_PERCENTILE
+KEYFIELD			= "runtime"
+KEYTYPE				= "total"
 
 def banner():
 	""" Text banner """
@@ -57,6 +59,8 @@ def report_dates(period = "week", count = 1):
 	
 	back_count = 7
 
+	if period == "day":
+		back_count = 1
 	if period == "week":
 		back_count = 7
 	if period == "month":
@@ -74,22 +78,350 @@ def report_dates(period = "week", count = 1):
 	dates_list.reverse()
 	return dates_list
 
+def print_report(report_data_list = None, csv = False):
+	""" Do a screen print of a list of report data instances """
+	
+	if report_data_list:
+		
+		if csv is False:
+		
+			print("")
+			print(f"Period (type)     Jobs -   CPUHours -  RunTime -                WaitTime -               Cores -              Nodes -           RAM/Core -")
+			print(f"                  Total    Total       Min/Max/Mean/{REPORT_PERCENTILE:2.0f}%         Min/Max/Mean/{REPORT_PERCENTILE:2.0f}%         Min/Max/Mean/{REPORT_PERCENTILE:2.0f}%     Min/Max/Mean/{REPORT_PERCENTILE:2.0f}%  Min/Max/Mean/{REPORT_PERCENTILE:2.0f}%")
+			print(f"=============     =======  ==========  =======================  =======================  ===================  ================  ===============================")
+			
+			for rep in report_data_list:
+				print(f"{str(rep['start']):.10} ", end='')
+				print(f"{rep['period_type']:<6} ", end='')
+				print(f"{rep['total_jobs']:<8} ", end='')
+				print(f"{rep['cpuhours']:<10.1f}  ", end='')
+				print(f"{rep['runtime']['min']:5.0f}/{rep['runtime']['max']:5.0f}/{rep['runtime']['mean']:5.0f}/{rep['runtime']['custom']:5.0f}  ", end='')
+				print(f"{rep['waittime']['min']:5.0f}/{rep['waittime']['max']:5.0f}/{rep['waittime']['mean']:5.0f}/{rep['waittime']['custom']:5.0f}  ", end='')
+				print(f"{rep['cores']['min']:4.0f}/{rep['cores']['max']:4.0f}/{rep['cores']['mean']:4.0f}/{rep['cores']['custom']:4.0f}       ", end='')
+				print(f"{rep['nodes']['min']:2.0f}/{rep['nodes']['max']:2.0f}/{rep['nodes']['mean']:2.0f}/{rep['nodes']['custom']:2.0f}  ", end='')
+				print(f"{rep['ramcore']['min']:7.0f}/{rep['ramcore']['max']:7.0f}/{rep['ramcore']['mean']:7.0f}/{rep['ramcore']['custom']:7.0f} ", end='')
+				print("")
+				
+		else:
+			
+			print(f"date,", end='')
+			print(f"period,", end='')
+			print(f"jobs (total),", end='')
+			print(f"cpu hours (total),", end='')
+			print(f"job runtime (total),job runtime (min),job runtime (max),job runtime (mean),job runtime ({REPORT_PERCENTILE:2.0f}%),", end='')
+			print(f"job waittime (total),job waittime (min),job waittime (max),job waittime (mean),job waittime ({REPORT_PERCENTILE:2.0f}%),", end='')
+			print(f"job cores (min),job cores (max),job cores (mean),job cores ({REPORT_PERCENTILE:2.0f}%),", end='')
+			print(f"job nodes (min),job nodes (max),job nodes (mean),job nodes ({REPORT_PERCENTILE:2.0f}%),", end='')
+			print(f"ram per core (min),ram per core (max),ram per core (mean),ram per core ({REPORT_PERCENTILE:2.0f}%)")
+			
+			for rep in report_data_list:
+				print(f"{str(rep['start']):.10},", end='')
+				print(f"{rep['period_type']},", end='')
+				print(f"{rep['total_jobs']},", end='')
+				print(f"{rep['cpuhours']},", end='')
+				print(f"{rep['runtime']['total']},{rep['runtime']['min']},{rep['runtime']['max']},{rep['runtime']['mean']},{rep['runtime']['custom']},", end='')
+				print(f"{rep['waittime']['total']},{rep['waittime']['min']},{rep['waittime']['max']},{rep['waittime']['mean']},{rep['waittime']['custom']},", end='')
+				print(f"{rep['cores']['min']},{rep['cores']['max']},{rep['cores']['mean']},{rep['cores']['custom']},", end='')
+				print(f"{rep['nodes']['min']},{rep['nodes']['max']},{rep['nodes']['mean']},{rep['nodes']['custom']},", end='')
+				print(f"{rep['ramcore']['min']},{rep['ramcore']['max']},{rep['ramcore']['mean']},{rep['ramcore']['custom']}")
+	
+def print_user_report(report_data_list = None, csv = False, keyfield = "runtime", keytype = "total"):
+	""" Do a screen print of a list of report data instances - by user """
+
+	if report_data_list:
+		
+		# Generate a unique list of usernames
+		user_list = []
+		for rep in report_data_list:
+			for username in rep['by_user']:
+				if username not in user_list:
+					user_list.append(username)
+		user_list.sort()
+		
+		if csv is False:
+		
+			print("")
+			print(f"Period (type)")			
+			print(f"========== ", end='')
+			for username in user_list:
+				print(f"{username:>8} ", end='')
+			print("")
+				
+			for rep in report_data_list:
+				print(f"{str(rep['start']):.10} ", end='')
+				for username in user_list:
+					if username in rep['by_user']:
+						print(f"{rep['by_user'][username]['runtime']['mean']:8.0f} ", end='')
+					else:
+						print(f"       0 ", end='')
+				print("")
+				
+		else:
+			print(f"{keytype} {keyfield} date,period,", end='')
+			for username in user_list:
+				print(f"{username},", end='')
+			print("")
+			
+			for rep in report_data_list:
+				print(f"{str(rep['start']):.10},", end='')
+				print(f"{rep['period_type']},", end='')
+				for username in user_list:
+					if username in rep['by_user']:
+						if keyfield == "runtime":
+							print(f"{rep['by_user'][username]['runtime'][keytype]:.1f},", end='')
+						if keyfield == "waittime":
+							print(f"{rep['by_user'][username]['waittime'][keytype]:.1f},", end='')
+						if keyfield == "cores":
+							print(f"{rep['by_user'][username]['cores'][keytype]:.1f},", end='')
+						if keyfield == "nodes":
+							print(f"{rep['by_user'][username]['nodes'][keytype]:.1f},", end='')
+						if keyfield == "ramcore":
+							print(f"{rep['by_user'][username]['ramcore'][keytype]:.1f},", end='')
+						if keyfield == "cpuhours":
+							print(f"{rep['by_user'][username]['cpuhours'][keytype]:.1f},", end='')
+					else:
+						print(f"0,", end='')
+				print("")
+			pass
+
+def analyse_jobs(period_data = None, period_type = None):
+	""" Analyse the jobs in a given period and produce the following summary data
+		- Number of jobs
+		- Number of users
+		- Min/Mean/Max/75% runtime per job
+		- Min/Mean/Max/75% wait time per job
+		- Min/Mean/Max/75% job core count
+		- Min/Mean/Max/75% job node count
+		- Min/Mean/Max/75% job memory/core count
+		
+		We also create a list of jobs per-person, with the same figures
+	"""
+	
+	report_data = {}
+	report_data['start'] = period_data['start']
+	report_data['end'] = period_data['end']
+	report_data['period_type'] = period_type
+	report_data['runtime'] = { 'min' : 9999, 'mean' : 0, 'max' : 0, 'total' : 0, 'custom' : 0 }
+	report_data['waittime'] = { 'min' : 9999, 'mean' : 0, 'max' : 0, 'total' : 0, 'custom' : 0 }
+	report_data['cores'] = { 'min' : 9999, 'mean' : 0, 'max' : 0, 'total' : 0, 'custom' : 0 }
+	report_data['nodes'] = { 'min' : 9999, 'mean' : 0, 'max' : 0, 'total' : 0, 'custom' : 0 }
+	report_data['ramcore'] = { 'min' : 9999, 'mean' : 0, 'max' : 0, 'total' : 0, 'custom' : 0 }
+	report_data['by_user'] = {}
+	report_data['total_jobs'] = len(period_data['jobs'])
+	report_data['total_users'] = 0
+	report_data['cpuhours'] = 0
+	
+	runtime_list = []
+	waittime_list = []
+	cores_list = []
+	nodes_list = []
+	ramcore_list = []
+	
+	if report_data['total_jobs'] > 0:
+		for job in period_data['jobs']:
+			
+			# Record absolute values
+			runtime_list.append(job['ElapsedTime'])
+			waittime_list.append(job['SubmitMinutes'])
+			cores_list.append(job['AllocCPUS'])
+			nodes_list.append(job['AllocNodes'])
+			ramcore_list.append(job['MemoryPerCore'])
+			
+			username = job['User']
+			
+			# Set up a new data structure for this user
+			if username not in report_data['by_user']:
+				report_data['by_user'][username] = {
+					'jobs' : 0,
+					'runtime' : { 'min' : 9999, 'mean' : 0, 'max' : 0, 'total' : 0, 'custom' : 0 },
+					'waittime' : { 'min' : 9999, 'mean' : 0, 'max' : 0, 'total' : 0, 'custom' : 0 },
+					'cores' : { 'min' : 9999, 'mean' : 0, 'max' : 0, 'total' : 0, 'custom' : 0 },
+					'nodes' : { 'min' : 9999, 'mean' : 0, 'max' : 0, 'total' : 0, 'custom' : 0 },
+					'ramcore' : { 'min' : 9999, 'mean' : 0, 'max' : 0, 'total' : 0, 'custom' : 0 },
+					'cpuhours' : { 'min' : 9999, 'mean' : 0, 'max' : 0, 'total' : 0, 'custom' : 0 },
+				}
+				
+			# Update user totals
+			report_data['by_user'][username]['jobs']  = report_data['by_user'][username]['jobs'] + 1
+			report_data['by_user'][username]['runtime']['total'] = report_data['by_user'][username]['runtime']['total'] + job['ElapsedTime']
+			report_data['by_user'][username]['waittime']['total'] = report_data['by_user'][username]['waittime']['total'] + job['SubmitMinutes']
+			report_data['by_user'][username]['cores']['total'] = report_data['by_user'][username]['cores']['total'] + job['AllocCPUS']
+			report_data['by_user'][username]['nodes']['total'] = report_data['by_user'][username]['nodes']['total'] + job['AllocNodes']
+			report_data['by_user'][username]['ramcore']['total'] = report_data['by_user'][username]['ramcore']['total'] + job['MemoryPerCore']
+			report_data['by_user'][username]['cpuhours']['total'] = report_data['by_user'][username]['cpuhours']['total'] + ((job['AllocCPUS'] * job['ElapsedTime']) / 60)
+			
+			# Update user max values
+			if job['ElapsedTime'] > report_data['by_user'][username]['runtime']['max']:
+				report_data['by_user'][username]['runtime']['max'] = job['ElapsedTime']
+				
+			if job['SubmitMinutes'] > report_data['by_user'][username]['waittime']['max']:
+				report_data['by_user'][username]['waittime']['max'] = job['SubmitMinutes']
+				
+			if job['AllocCPUS'] > report_data['by_user'][username]['cores']['max']:
+				report_data['by_user'][username]['cores']['max'] = job['AllocCPUS']
+				
+			if job['AllocNodes'] > report_data['by_user'][username]['nodes']['max']:
+				report_data['by_user'][username]['nodes']['max'] = job['AllocNodes']
+				
+			if job['MemoryPerCore'] > report_data['by_user'][username]['ramcore']['max']:
+				report_data['by_user'][username]['ramcore']['max'] = job['MemoryPerCore']
+				
+			if ((job['AllocCPUS'] * job['ElapsedTime']) / 60) > report_data['by_user'][username]['cpuhours']['max']:
+				report_data['by_user'][username]['cpuhours']['max'] = ((job['AllocCPUS'] * job['ElapsedTime']) / 60)
+				
+			# Update user min values
+			if job['ElapsedTime'] < report_data['by_user'][username]['runtime']['min']:
+				report_data['by_user'][username]['runtime']['max'] = job['ElapsedTime']
+				
+			if job['SubmitMinutes'] < report_data['by_user'][username]['waittime']['min']:
+				report_data['by_user'][username]['waittime']['max'] = job['SubmitMinutes']
+				
+			if job['AllocCPUS'] < report_data['by_user'][username]['cores']['min']:
+				report_data['by_user'][username]['cores']['max'] = job['AllocCPUS']
+				
+			if job['AllocNodes'] < report_data['by_user'][username]['nodes']['min']:
+				report_data['by_user'][username]['nodes']['max'] = job['AllocNodes']
+				
+			if job['MemoryPerCore'] < report_data['by_user'][username]['ramcore']['min']:
+				report_data['by_user'][username]['ramcore']['max'] = job['MemoryPerCore']
+				
+			if ((job['AllocCPUS'] * job['ElapsedTime']) / 60) < report_data['by_user'][username]['cpuhours']['min']:
+				report_data['by_user'][username]['cpuhours']['max'] = ((job['AllocCPUS'] * job['ElapsedTime']) / 60)
+			
+			# UPdate user averages
+			report_data['by_user'][username]['runtime']['mean'] = report_data['by_user'][username]['runtime']['total'] / report_data['by_user'][username]['jobs']
+			report_data['by_user'][username]['waittime']['mean'] = report_data['by_user'][username]['waittime']['total'] / report_data['by_user'][username]['jobs']
+			report_data['by_user'][username]['cores']['mean'] = report_data['by_user'][username]['cores']['total'] / report_data['by_user'][username]['jobs']
+			report_data['by_user'][username]['nodes']['mean'] = report_data['by_user'][username]['nodes']['total'] / report_data['by_user'][username]['jobs']
+			report_data['by_user'][username]['ramcore']['mean'] = report_data['by_user'][username]['ramcore']['total'] / report_data['by_user'][username]['jobs']
+			report_data['by_user'][username]['cpuhours']['mean'] = report_data['by_user'][username]['cpuhours']['total'] / report_data['by_user'][username]['jobs']
+			
+			# Update period total values
+			report_data['runtime']['total'] = report_data['runtime']['total'] + job['ElapsedTime']
+			report_data['waittime']['total'] = report_data['waittime']['total'] + job['SubmitMinutes']
+			report_data['cores']['total'] = report_data['cores']['total'] + job['AllocCPUS']
+			report_data['nodes']['total'] = report_data['nodes']['total'] + job['AllocNodes']
+			report_data['ramcore']['total'] = report_data['ramcore']['total'] + job['MemoryPerCore']
+			report_data['cpuhours'] = report_data['cpuhours'] + (job['AllocCPUS'] * job['ElapsedTime'])
+			
+			# Update period max values
+			if job['ElapsedTime'] > report_data['runtime']['max']:
+				report_data['runtime']['max'] = job['ElapsedTime']
+				
+			if job['SubmitMinutes'] > report_data['waittime']['max']:
+				report_data['waittime']['max'] = job['SubmitMinutes']
+				
+			if job['AllocCPUS'] > report_data['cores']['max']:
+				report_data['cores']['max'] = job['AllocCPUS']
+				
+			if job['AllocNodes'] > report_data['nodes']['max']:
+				report_data['nodes']['max'] = job['AllocNodes']
+				
+			if job['MemoryPerCore'] > report_data['ramcore']['max']:
+				report_data['ramcore']['max'] = job['MemoryPerCore']
+				
+			# Update period min values
+			if job['ElapsedTime'] < report_data['runtime']['min']:
+				report_data['runtime']['min'] = job['ElapsedTime']
+				
+			if job['SubmitMinutes']< report_data['waittime']['min']:
+				report_data['waittime']['min'] = job['SubmitMinutes']
+				
+			if job['AllocCPUS'] < report_data['cores']['min']:
+				report_data['cores']['min'] = job['AllocCPUS']
+				
+			if job['AllocNodes'] < report_data['nodes']['min']:
+				report_data['nodes']['min'] = job['AllocNodes']
+				
+			if job['MemoryPerCore'] < report_data['ramcore']['min']:
+				report_data['ramcore']['min'] = job['MemoryPerCore']
+				
+		# Update period averages
+		report_data['runtime']['mean'] = report_data['runtime']['total'] / report_data['total_jobs']
+		report_data['waittime']['mean'] = report_data['waittime']['total'] / report_data['total_jobs']
+		report_data['cores']['mean'] = report_data['cores']['total'] / report_data['total_jobs']
+		report_data['nodes']['mean'] = report_data['nodes']['total'] / report_data['total_jobs']
+		report_data['ramcore']['mean'] = report_data['ramcore']['total'] / report_data['total_jobs']
+		report_data['total_users'] = len(report_data['by_user'])
+		
+		# Calculate waterlevel values based on our custom report percentile
+		runtime_list.sort()
+		waittime_list.sort()
+		cores_list.sort()
+		nodes_list.sort()
+		ramcore_list.sort()
+		if len(runtime_list) > 0:
+			idx = int(len(runtime_list) * (REPORT_PERCENTILE / 100))
+			report_data['runtime']['custom'] = runtime_list[idx]
+		if len(waittime_list) > 0:
+			idx = int(len(waittime_list) * (REPORT_PERCENTILE / 100))
+			report_data['waittime']['custom'] = waittime_list[idx]
+		if len(cores_list) > 0:
+			idx = int(len(cores_list) * (REPORT_PERCENTILE / 100))
+			report_data['cores']['custom'] = cores_list[idx]
+		if len(nodes_list) > 0:
+			idx = int(len(nodes_list) * (REPORT_PERCENTILE / 100))
+			report_data['nodes']['custom'] = nodes_list[idx]
+		if len(ramcore_list) > 0:
+			idx = int(len(ramcore_list) * (REPORT_PERCENTILE / 100))
+			report_data['ramcore']['custom'] = ramcore_list[idx]
+	
+		# Convert cpu minutes to cpu hours
+		report_data['cpuhours'] = (report_data['cpuhours'] / 60)
+
+	return report_data
+
 if __name__ == "__main__":
 
 	parser = argparse.ArgumentParser("sjobs")
-	parser.add_argument("-csv", help="Enable CSV output only.", action="store_true")
-	parser.add_argument("-week", help="Reports are in periods of one week.", action="store_true")
+	parser.add_argument("-csv", help="Enable CSV summary output only [default disabled].", action="store_true")
+	parser.add_argument("-csv_user", help="Enable CSV user stats output only [default disabled].", action="store_true")
+	parser.add_argument("-keyfield", help="One of [runtime, waittime, cores, nodes, ramcore, cpuhours], [default is runtime].", type=str)
+	parser.add_argument("-keytype", help="Data type to use for the keyfield, one of [min, max, mean, total], [default is total].", type=str)
+	parser.add_argument("-day", help="Reports are in periods of one day.", action="store_true")
+	parser.add_argument("-week", help="Reports are in periods of one week [default].", action="store_true")
 	parser.add_argument("-month", help="Reports are in periods of one month.", action="store_true")
 	parser.add_argument("-year", help="Reports are in periods of one year.", action="store_true")
-	parser.add_argument("-periods", help="Total number of reporting periods to produce history for.", type=int)
+	parser.add_argument("-periods", help="Total number of reporting periods to produce history for [default is 1].", type=int)
+	parser.add_argument("-pc", help="Percentile figure for reports [defaults is 75].", type=int)
 
 	args = parser.parse_args()
+
+	if args.keyfield:
+		if args.keyfield == "runtime":
+			KEYFIELD = "runtime"
+		if args.keyfield == "waittime":
+			KEYFIELD = "waittime"
+		if args.keyfield == "cores":
+			KEYFIELD = "cores"
+		if args.keyfield == "nodes":
+			KEYFIELD = "nodes"
+		if args.keyfield == "ramcore":
+			KEYFIELD = "ramcore"
+		if args.keyfield == "cpuhours":
+			KEYFIELD = "cpuhours"
+
+	if args.keytype:
+		if args.keytype == "min":
+			KEYTYPE = "min"
+		if args.keytype == "max":
+			KEYTYPE = "max"
+		if args.keytype == "mean":
+			KEYTYPE = "mean"
+		if args.keytype == "total":
+			KEYTYPE = "total"
 
 	if args.csv:
 		OUT_MODE = "csv"
 
-	if OUT_MODE != "csv":
+	if args.csv_user:
+		OUT_MODE = "csv_user"
+
+	if OUT_MODE not in ["csv", "csv_user"]:
 		banner()
+
+	if args.day:
+		PERIOD = "day"
 
 	if args.week:
 		PERIOD = "week"
@@ -105,9 +437,16 @@ if __name__ == "__main__":
 	else:
 		PERIOD_COUNT = 1
 
-	if OUT_MODE != "csv":
+	if args.pc:
+		if (args.pc < 100) and (args.pc > 0):
+			REPORT_PERCENTILE = args.pc
+		else:
+			REPORT_PERCENTILE = CUSTOM_PERCENTILE
+
+	if OUT_MODE not in ["csv", "csv_user"]:
 		print(f"Report period	: {PERIOD}")
 		print(f"Report count	: {PERIOD_COUNT}")
+		print(f"Percentile	: {REPORT_PERCENTILE}%")
 		print("")
 
 	sj = SlurmJob()
@@ -115,33 +454,46 @@ if __name__ == "__main__":
 	# Generate the list of start/end dates
 	period_dates = report_dates(period = PERIOD, count = PERIOD_COUNT)
 	
+	# Get job data for each of the report dates
 	period_data = []
-	if OUT_MODE != "csv":
+	if OUT_MODE not in ["csv", "csv_user"]:
 		print(f"Please wait, starting retrieval of job data...")
 	for d in period_dates:
 		
 		# Produce a report for the given start/end date pair
 		start = f"{d['start'].year}-{d['start'].month:02}-{d['start'].day:02}T00:00:00"
-		end = f"{d['end'].year}-{d['end'].month:02}-{d['end'].day:02}T23:59:59"
+		end = f"{d['end'].year}-{d['end'].month:02}-{d['end'].day:02}T00:00:00"
 
-		if OUT_MODE != "csv":
-			print(f"Retrieving {PERIOD} data for {start} - {end}")
-		jobs = sj.get_bystate(state = "CD", start = start, end = end, expand_nodes = False)
+		if OUT_MODE not in ["csv", "csv_user"]:
+			print(f"- Retrieving {PERIOD} data for {start} - {end}")
+		jobs = sj.get_bystate(state = jobtype, start = start, end = end, expand_nodes = False)
 		
 		data = {
 			'start' : d['start'],
 			'end' : d['end'],
 			'jobs' : jobs,
 		}
-		
 		period_data.append(data)
-	if OUT_MODE != "csv":
+		
+	# For every report period data returned, process it
+	if OUT_MODE not in ["csv", "csv_user"]:
 		print("")
 		print(f"Please wait, analysing job data...")
-
-	# For every report period data returned, process it
+	all_report_data = []
 	for data in period_data:
-		print(f"Analysing {len(data['jobs'])} jobs")
+		if OUT_MODE not in ["csv", "csv_user"]:
+			print(f"- Analysing {len(data['jobs'])} jobs")
+		report_data = analyse_jobs(period_data = data, period_type = PERIOD)
+		all_report_data.append(report_data)
+		
+	if OUT_MODE not in ["csv", "csv_user"]:
+		print_report(all_report_data, False)
+		#print_user_report(all_report_data, False, KEYFIELD, KEYTYPE)
+	else:
+		if OUT_MODE == "csv":
+			print_report(all_report_data, True)
+		if OUT_MODE == "csv_user":
+			print_user_report(all_report_data, True, KEYFIELD, KEYTYPE)
 
 	# Produce the report for the queue
 	# TBC

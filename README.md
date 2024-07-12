@@ -7,6 +7,7 @@ The tools are fairly simple, usually performing a single function, and are model
    * [diskrep](docs/diskrep.md) - A disk/filesystem utilisation report tool
    * [grouprep](docs/grouprep) - A group audit tool
    * [modulespy](docs/modulespy) - A Linux *module* dependency finder
+   * [shistory](docs/shistory) - Historic data of the overall HPC system, or HPC users
    * [sjobs](docs/sjobs) - A simple Slurm queue & job report tool
 
 Required packages for most of the tools are usually limited to basic system tools (e.g. slurm itself, quota tools) and Python (3.x). The only external packages are required are those used by the HTML report generators.

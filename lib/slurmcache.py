@@ -30,7 +30,7 @@ import hashlib
 import os
 import lib.settings as settings
 
-CODE_FILES = ["slurmstats.py", "slurmjob.py", "slurmnode.py", "slurmpartition.py"]
+CODE_FILES = ["lib/slurmjob.py"]
 
 class slurmCache():
 
@@ -63,7 +63,9 @@ class slurmCache():
 		
 		if self.master_key is None:
 			self.hashcode()
-		k = self.master_key + "-" + str(year) + "-" + str(month) + "-" + str(day) + "-" + str(hours) + "-" + str(minutes) + str(key)
+		sub_key = str(year) + "-" + str(month) + "-" + str(day) + "-" + str(hours) + "-" + str(minutes) + str(key)
+		sub_key = sub_key.encode('utf-8')
+		k = self.master_key + "-" + hashlib.md5(sub_key).hexdigest()
 		
 		return k
 		
@@ -93,6 +95,45 @@ class slurmCache():
 		""" Load a persistent cache object from disk """
 
 		k = self.hashkey(year, month, day, hours, minutes, key)
+			
+		cache_filename = settings.CACHE_PATH + "/" + k + ".json"
+		
+		if os.path.exists(cache_filename):
+			if self.debug:
+				print("-- Cache loading %s" % cache_filename)
+			cache_file = open(cache_filename, "r")
+			cache_data = cache_file.read()
+			data = json.loads(cache_data)
+			cache_file.close()
+			return data
+		else:
+			return False
+		
+	def storecmd(self, key = "", data = None):
+		""" Store a persistent data object on disk """
+		
+		if data:
+				
+			k = self.hashkey(key)
+			
+			cache_filename = settings.CACHE_PATH + "/" + k + ".json"
+			
+			if os.path.exists(cache_filename):
+				os.remove(cache_filename)
+				
+			json_data = json.dumps(data)
+			
+			cache_file = open(cache_filename, "w")
+			cache_file.write(json_data)
+			cache_file.close()
+			return True
+		else:
+			return False
+		
+	def loadcmd(self, key = ""):
+		""" Load a persistent cache object from disk """
+
+		k = self.hashkey(key)
 			
 		cache_filename = settings.CACHE_PATH + "/" + k + ".json"
 		

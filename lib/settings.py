@@ -24,7 +24,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 ######################################################
 
-DEBUG = True
+DEBUG = False
 
 # Where templates live, relative to this file
 TEMPLATE_PATH = "./templates/"
