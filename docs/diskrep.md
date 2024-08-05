@@ -20,6 +20,7 @@ Optionally, in the case of a Lustre filesystem, the Lustre variant of the find u
 #### Options & Arguments
 
    * **-nq** No Quota; disables quota-based utilisation calculations and switches on *find* and manual file-size metrics. Slower, but will work for any directory or filesystem tree, including those without quotas enabled
+   * **-ls** No Quota, and use a recursive *ls* command instead of *find*. This is generally fast, but due to the way ls, find, quota, du differ, may not be as accurate as other methods. However, it is usually 'good enough'.
    * **-csv** Data will be output in comma seperated value format
    * **-bygroup** Utilisation will be aggregated by group, rather than user; i.e. you will see totals for a group, the default is to report by individual user
    * **-users** A comma seperated list of which users to generate a report for

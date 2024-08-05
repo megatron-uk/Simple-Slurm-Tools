@@ -25,6 +25,8 @@ import sys
 
 from lib.posix import get_users, get_groups, get_users_from_groups
 from lib.posix import get_group_quota, get_group_utilisation
+from lib.posix import get_user_quota, get_user_utilisation
+from lib.posix import get_user_utilisation_ls, get_group_utilisation_ls
 
 ####################################################################
 #
@@ -90,7 +92,7 @@ def report_by_find(dir_name = None, users = None, users_exclude = None, groups =
 		# For every group, find their list of files under this directory path and sum up the usage.
 		for group in groups:
 			if group not in groups_exclude:
-				data = get_group_utilisation(FIND_TYPE, group, dir_name)
+				data = get_group_utilisation(FIND_MODE, group, dir_name)
 				if data:
 					reports.append(data)
 
@@ -98,7 +100,29 @@ def report_by_find(dir_name = None, users = None, users_exclude = None, groups =
 		# For every user, find their list of files under this directory path and sum up the usage.
 		for user in users:
 			if user not in users_exclude:
-				data = get_user_utilisation(FIND_TYPE, user, dir_name)
+				data = get_user_utilisation(FIND_MODE, user, dir_name)
+				if data:
+					reports.append(data)	
+	return reports
+
+def report_by_ls(dir_name = None, users = None, users_exclude = None, groups = None, groups_exclude = None, by_group = False):
+	""" Report filesystem use using ls for a given path """
+	
+	reports = []
+		
+	if by_group and groups:
+		# For every group, find their list of files under this directory path and sum up the usage.
+		for group in groups:
+			if group not in groups_exclude:
+				data = get_group_utilisation_ls(FIND_MODE, group, dir_name)
+				if data:
+					reports.append(data)
+
+	if (by_group is False) and users:
+		# For every user, find their list of files under this directory path and sum up the usage.
+		for user in users:
+			if user not in users_exclude:
+				data = get_user_utilisation_ls(FIND_MODE, user, dir_name)
 				if data:
 					reports.append(data)	
 	return reports
@@ -183,6 +207,8 @@ if __name__ == "__main__":
 	parser.add_argument("dir_name", help="The directory path or filesystem to analyse.", type=str)
 	parser.add_argument("-nq", help="Disable quota, use find/du: this will be slower.",
 		action="store_true")
+	parser.add_argument("-ls", help="Disable quota, use recursive ls: this should be fast.",
+		action="store_true")
 	parser.add_argument("-csv", help="Enable CSV output only.", action="store_true")
 	parser.add_argument("-bygroup", help="Report utilisation by group, not user.", action="store_true")
 	parser.add_argument("-users", help="Comma seperated list of users to report.", type=str)
@@ -200,6 +226,9 @@ if __name__ == "__main__":
 	
 	if args.nq:
 		FIND_MODE = "find"
+
+	if args.ls:
+		FIND_MODE = "ls"
 
 	if args.csv:
 		OUT_MODE = "csv"
@@ -254,6 +283,9 @@ if __name__ == "__main__":
 
 			if FIND_MODE == "quota":
 				reports = report_by_quota(DIR_NAME, ALL_USERS, ALL_USERS_EXCLUDE, ALL_GROUPS, ALL_GROUPS_EXCLUDE, BY_GROUP)
+				
+			if FIND_MODE == "ls":
+				reports = report_by_ls(DIR_NAME, ALL_USERS, ALL_USERS_EXCLUDE, ALL_GROUPS, ALL_GROUPS_EXCLUDE, BY_GROUP)
 				
 			if BY_GROUP:
 				report_groups(DIR_NAME, reports, OUT_MODE)

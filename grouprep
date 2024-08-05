@@ -25,7 +25,8 @@ import sys
 
 from lib.posix import get_users, get_groups, get_users_from_groups
 from lib.posix import get_group_quota, get_group_utilisation, get_user_utilisation
-from lib.posix import get_user_orphaned_files
+from lib.posix import get_group_utilisation_ls, get_user_utilisation_ls
+from lib.posix import get_user_orphaned_files, get_user_orphaned_files_ls
 
 ####################################################################
 #
@@ -86,6 +87,7 @@ def report_full(report = None):
 	
 	# Space utilisation of each member
 	if is_group_has_members:
+		print(f"Group user list...")
 		for user_data in report['user_utilisation']:
 			if user_data['data']:
 				print(f"- user {user_data['user']}		{user_data['data']['quota']} kbytes")
@@ -102,7 +104,7 @@ def report_full(report = None):
 		if len(report['alien_group_utilisation']['files']) > 0:
 			print(f"Total space		{report['alien_group_utilisation']['quota']} kbytes")
 			print(f"Total files		{len(report['alien_group_utilisation']['files'])} files")
-			print("* These files may need a 'chgrp'")
+			print("\n* ^- This content may need a 'chgrp'")
 		else:
 			print("No alien group ownership found")
 		print(f"* Hint: {cmd}")
@@ -121,9 +123,10 @@ def report_full(report = None):
 			print(f"Total space		{report['alien_user_utilisation']['quota']} kbytes")
 			print(f"Total files		{len(report['alien_user_utilisation']['files'])} files")
 			print(f"Total users		{len(report['alien_user_utilisation']['users'])} users")
+			print(f"Alien user list...")
 			for uid in report['alien_user_utilisation']['users']:
 				print(f"- uid {uid} / {report['alien_user_utilisation']['users'][uid]['username']}		{report['alien_user_utilisation']['users'][uid]['quota']} kbytes, in {len(report['alien_user_utilisation']['users'][uid]['files'])} files")
-			print("* These files may need a 'chown'")
+			print("\n* ^- This content may need a 'chown'")
 		else:
 			print("No alien users found")
 		print(f"* Hint: {cmd}")
@@ -153,6 +156,8 @@ if __name__ == "__main__":
 	parser.add_argument("-lfs", help="Use native Lustre find and quota commands.", action="store_true")
 	parser.add_argument("-nq", help="Disable quota, use find/du: this will be slower.",
 		action="store_true")
+	parser.add_argument("-ls", help="Disable quota, use recursive ls: this should be fast.",
+		action="store_true")
 	args = parser.parse_args()
 
 	reports = []
@@ -166,6 +171,9 @@ if __name__ == "__main__":
 
 	if args.nq:
 		FIND_MODE = "find"
+		
+	if args.ls:
+		FIND_MODE = "ls"
 
 	if args.csv:
 		OUT_MODE = "csv"
@@ -227,6 +235,8 @@ if __name__ == "__main__":
 			# Overall space utilisation by this group
 			if report['method'] == "find":
 				report['group_utilisation'] = get_group_utilisation(FIND_TYPE, GROUP, DIR_NAME)
+			if report['method'] == "ls":
+				report['group_utilisation'] = get_group_utilisation_ls(FIND_TYPE, GROUP, DIR_NAME)
 			else:
 				report['group_utilisation'] = get_group_quota(FIND_TYPE, GROUP, DIR_NAME)
 
@@ -248,12 +258,18 @@ if __name__ == "__main__":
 			# Overall space utilisation by files that are set to a different group
 			if OUT_MODE != "csv":
 				print("Please wait, retrieving alien group space utilisation: ")
-			report['alien_group_utilisation'] = get_group_utilisation(FIND_TYPE, GROUP, DIR_NAME, invert = True)
-
+			if report['method'] == "ls":
+				report['alien_group_utilisation'] = get_group_utilisation_ls(FIND_TYPE, GROUP, DIR_NAME, invert = True)
+			else:
+				report['alien_group_utilisation'] = get_group_utilisation(FIND_TYPE, GROUP, DIR_NAME, invert = True)
+	
 			# Overall space utilisation by users NOT in this group
 			if OUT_MODE != "csv":
 				print("Please wait, retrieving alien user space utilisation: ")
-			report['alien_user_utilisation'] = get_user_orphaned_files(FIND_TYPE, ALL_USERS, DIR_NAME)
+			if report['method'] == "ls":
+				report['alien_user_utilisation'] = get_user_orphaned_files_ls(FIND_TYPE, ALL_USERS, DIR_NAME)
+			else:
+				report['alien_user_utilisation'] = get_user_orphaned_files(FIND_TYPE, ALL_USERS, DIR_NAME)
 
 			if OUT_MODE != "csv":
 				# Main visual report	

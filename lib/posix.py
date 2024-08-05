@@ -85,7 +85,7 @@ def get_users_from_groups(groups = []):
 def get_user_quota(find_type = "normal", user_name = "myname", quota_directory = "/mydir"):
 	""" Get quota details for a given username and mount point """
 	
-	if FIND_TYPE == "lfs":
+	if find_type == "lfs":
 		job_cmd = f"lfs quota -u {user_name} 2>/dev/null {quota_directory} | grep {quota_directory}"
 	else:
 		job_cmd = f"quota -u {user_name} --show-mntpoint -w 2>/dev/null | grep {quota_directory}"
@@ -99,6 +99,9 @@ def get_user_quota(find_type = "normal", user_name = "myname", quota_directory =
 	}
 	
 	try:
+		process = subprocess.Popen(job_cmd, shell=True,
+						stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+						stderr=subprocess.STDOUT)
 		if process:
 			output = process.stdout.read()
 			if len(output) > 1:
@@ -130,7 +133,7 @@ def get_user_quota(find_type = "normal", user_name = "myname", quota_directory =
 		return(data)
 
 	except Exception as err:
-		pass
+		print("ERROR (get_user_quota): %s" % err)
 		return False
 	
 def get_group_quota(find_type = "normal", group_name = "mygroup", quota_directory = "/mydir"):
@@ -184,24 +187,297 @@ def get_group_quota(find_type = "normal", group_name = "mygroup", quota_director
 		return(data)
 
 	except Exception as err:
+		print("ERROR (get_group_quota): %s" % err)
+		return False
+
+def decode_ls_orphaned_files(ls_output = "", username_list = []):
+	""" Decode a block of -aslLR output, recording files which *do not* belong to a list of usernames """
+
+	ls_data = []
+	
+	# Field position in an ls -lR output
+	file_size_pos = 0
+	unix_perms_pos = 1
+	files_total_pos = 2
+	unix_owner_pos = 3
+	unix_group_pos = 4
+	file_bytesize_pos = 5
+	file_month_pos = 6
+	file_da_posy = 7
+	file_year_pos = 8
+	file_name_pos = 9
+	
+	line_no = 0
+	dirname = ""
+	dirsize = 0
+	ls_output_split = ls_output.split(b"\n")
+	for line in ls_output_split:
+		try:
+			line = line.decode()
+			if line_no == 0:
+				dirname = line
+			if line_no == 1:
+				line_split = line.split()
+				if len(line_split) == 2:
+					dirsize = int(line_split[1])					
+			else:
+				if line_no > 1:
+					line_split = line.split()
+					if len(line_split) > 9:
+						filename = line_split[file_name_pos]
+						
+						# Don't process "." and ".." entries
+						if filename not in [".", ".."]:
+							full_file_path = dirname + "/" + filename
+							unix_group = line_split[unix_group_pos]
+							unix_owner = line_split[unix_owner_pos]
+							file_size = line_split[file_size_pos]
+							file_size = int(file_size)
+							
+				
+							if unix_owner not in username_list:
+								f = {
+									'file' : full_file_path,
+									'username' : unix_owner,
+									'groupname' : unix_group,
+									'kbytes' : file_size,
+								}
+								ls_data.append(f)
+								
+		except Exception as err:
+			print("ERROR (decode_ls_orphaned_files): %s" % err)					
+						
+		line_no += 1
+	return ls_data
+
+def decode_ls_output_byuser(ls_output = "", user_name = "myname", invert = False):
+	""" Decode a block of ls -aslLR output, each block is split by a carriage return """
+	
+	# Example output
+	#
+	#./datafolder:
+	#total 10561076
+	#drwxr-s---  6 username groupname        4096 Jun 20  2023 .
+	#drwxrws--- 10 root     groupname        4096 Jun 21  2023 ..
+	#-rw-rw----  1 username anothergroup 10814461821 Jun 19  2023 file1.zip
+	#-rw-r-----  1 username groupname        4957 Jun 20  2023 file2.zip
+	#drwxr-s---  2 username groupname        4096 Jun 20  2023 file3.txt
+	#drwxrws---  3 username groupname        4096 Jun 19  2023 file4.txt
+	#drwxrws---  3 username groupname        4096 Jun 19  2023 file5.txt
+	#drwxrws---  3 username groupname        4096 Jun 19  2023 file6.csv
+	#
+	# In the case above, 'file1.zip' has a different group assigned to the directory itself.
+	
+	# Returns the following structure
+	#ls_data = {
+	#	'files' : ['/a/list/of/filenames'],
+	#	'bytes' : 12345,
+	#}
+	ls_data = {
+		'files' : [],
+		'bytes' : 0,
+		'kbytes' : 0,
+	}
+	
+	# Field position in an ls -lR output
+	file_size_pos = 0
+	unix_perms_pos = 1
+	files_total_pos = 2
+	unix_owner_pos = 3
+	unix_group_pos = 4
+	file_bytesize_pos = 5
+	file_month_pos = 6
+	file_da_posy = 7
+	file_year_pos = 8
+	file_name_pos = 9
+	
+	line_no = 0
+	dirname = ""
+	dirsize = 0
+	ls_output_split = ls_output.split(b"\n")
+	for line in ls_output_split:
+		try:
+			line = line.decode()
+			if line_no == 0:
+				dirname = line
+			if line_no == 1:
+				line_split = line.split()
+				if len(line_split) == 2:
+					dirsize = int(line_split[1])					
+			else:
+				if line_no > 1:
+					line_split = line.split()
+					if len(line_split) > 9:
+						filename = line_split[file_name_pos]
+						
+						# Don't process "." and ".." entries
+						if filename not in [".", ".."]:
+							full_file_path = dirname + "/" + filename
+							unix_group = line_split[unix_group_pos]
+							unix_owner = line_split[unix_owner_pos]
+							file_size = line_split[file_size_pos]
+							file_size = int(file_size)
+							
+							# Are we looking for non-matching owners?
+							if invert:
+								if unix_owner != user_name:
+									ls_data['files'].append(full_file_path)
+									ls_data['bytes'] = ls_data['bytes'] + file_size
+									
+							# ... or matching owners?
+							else:
+								if unix_owner == user_name:
+									ls_data['files'].append(full_file_path)
+									ls_data['bytes'] = ls_data['bytes'] + file_size
+		except Exception as err:
+			print("ERROR (decode_ls_output_byuser): %s" % err)					
+						
+		
+		line_no += 1
+	
+	ls_data['kbytes'] = ls_data['bytes']		
+	return ls_data
+
+def decode_ls_output_bygroup(ls_output = "", group_name = "mygroup", invert = False):
+	""" Decode a block of ls -lR output, each block is split by a carriage return """
+	
+	# Example output
+	#
+	#./datafolder:
+	#total 10561076
+	#drwxr-s---  6 username groupname        4096 Jun 20  2023 .
+	#drwxrws--- 10 root     groupname        4096 Jun 21  2023 ..
+	#-rw-rw----  1 username anothergroup 10814461821 Jun 19  2023 file1.zip
+	#-rw-r-----  1 username groupname        4957 Jun 20  2023 file2.zip
+	#drwxr-s---  2 username groupname        4096 Jun 20  2023 file3.txt
+	#drwxrws---  3 username groupname        4096 Jun 19  2023 file4.txt
+	#drwxrws---  3 username groupname        4096 Jun 19  2023 file5.txt
+	#drwxrws---  3 username groupname        4096 Jun 19  2023 file6.csv
+	#
+	# In the case above, 'file1.zip' has a different group assigned to the directory itself.
+	
+	# Returns the following structure
+	#ls_data = {
+	#	'files' : ['/a/list/of/filenames'],
+	#	'bytes' : 12345,
+	#}
+	ls_data = {
+		'files' : [],
+		'bytes' : 0,
+		'kbytes' : 0,
+	}
+	
+	# Field position in an ls -lR output
+	file_size_pos = 0
+	unix_perms_pos = 1
+	files_total_pos = 2
+	unix_owner_pos = 3
+	unix_group_pos = 4
+	file_bytesize_pos = 5
+	file_month_pos = 6
+	file_da_posy = 7
+	file_year_pos = 8
+	file_name_pos = 9
+	
+	line_no = 0
+	dirname = ""
+	dirsize = 0
+	
+	ls_output_split = ls_output.split(b"\n")
+	for line in ls_output_split:
+		try:
+			line = line.decode()
+			if line_no == 0:
+				dirname = line
+			if line_no == 1:
+				line_split = line.split()
+				if len(line_split) == 2:
+					dirsize = int(line_split[1])
+					ls_data['kbytes'] = dirsize
+			else:
+				if line_no > 1:
+					line_split = line.split()
+					if len(line_split) > 9:
+						filename = line_split[file_name_pos]
+						
+						# Don't process "." and ".." entries
+						if filename not in [".", ".."]:
+							full_file_path = dirname + "/" + filename
+							unix_group = line_split[unix_group_pos]
+							unix_owner = line_split[unix_owner_pos]
+							file_size = line_split[file_size_pos]
+							file_size = int(file_size)
+							
+							# Are we looking for non-matching groups?
+							if invert:
+								if unix_group != group_name:
+									ls_data['files'].append(full_file_path)
+									ls_data['bytes'] = ls_data['bytes'] + file_size
+									
+							# ... or matching groups?
+							else:
+								if unix_group == group_name:
+									ls_data['files'].append(full_file_path)
+									ls_data['bytes'] = ls_data['bytes'] + file_size
+		except Exception as err:
+			print("ERROR (decode_ls_output_bygroup): %s" % err)
+		
+		line_no += 1
+		
+	ls_data['kbytes'] = ls_data['bytes']		
+	return ls_data
+		
+			
+
+def get_group_utilisation_ls(find_type = "ls", group_name = "mygroup", quota_directory = "/mydir", invert = False, cmd_only = False):
+	""" Parse a block of output from an ls -lR command and return a python dict of the data """
+	
+	# Returns
+	data = {
+		'group'		: group_name,
+		'dirname'	: quota_directory,
+		'quota'		: 0,
+		'limit'		: 0,
+		'files'		: []
+	}
+	
+	job_cmd = f"ls -alskLR {quota_directory} 2>/dev/null"
+	
+	if cmd_only:
+		return job_cmd
+		
+	try:
+		process = subprocess.Popen(job_cmd, shell=True,
+					stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+					stderr=subprocess.STDOUT)
+		if process:
+			output = process.stdout.read().rstrip().split(b'\n\n')
+			for ls_output in output:
+				ls_data = decode_ls_output_bygroup(ls_output, group_name, invert)
+				data['quota'] = data['quota'] + ls_data['kbytes']
+				data['files'] = data['files'] + ls_data['files']
+				
+		return data
+
+	except Exception as err:
+		print("ERROR (get_group_utilisation_ls): %s" % err)
 		return False
 
 def get_group_utilisation(find_type = "normal", group_name = "mygroup", quota_directory = "/mydir", invert = False, cmd_only = False):
 	""" Uses 'find' to calculate the space utilisation of an entire directory tree by a given unix group """
-	
-	if find_type == "generic":
-		if invert:
-			# Find everything NOT owned by the group
-			job_cmd = f"find {quota_directory} -not -group {group_name} 2>/dev/null"
-		else:
-			job_cmd = f"find {quota_directory} -group {group_name} 2>/dev/null"
-		
+
 	if find_type == "lfs":
 		if invert:
 			# Find everything NOT owned by the group
 			job_cmd = f"lfs find {quota_directory} -not -group {group_name} 2>/dev/null"
 		else:
 			job_cmd = f"lfs find {quota_directory} -group {group_name} 2>/dev/null"
+	else:
+		if invert:
+			# Find everything NOT owned by the group
+			job_cmd = f"find {quota_directory} -not -group {group_name} 2>/dev/null"
+		else:
+			job_cmd = f"find {quota_directory} -group {group_name} 2>/dev/null"
 	
 	if cmd_only:
 		return job_cmd
@@ -248,16 +524,50 @@ def get_group_utilisation(find_type = "normal", group_name = "mygroup", quota_di
 		return data
 
 	except Exception as err:
+		print("ERROR (get_group_utilisation): %s" % err)
+		return False
+		
+def get_user_utilisation_ls(find_type = "normal", user_name = "myuser", quota_directory = "/mydir", cmd_only = False):
+	""" Report user utilisation of a given directory tree, using ls -lR """
+	
+	job_cmd = f"ls -alskLR {quota_directory} 2>/dev/null"
+	
+	if cmd_only:
+		return job_cmd
+		
+	data = {
+		'username'	: user_name,
+		'dirname'	: quota_directory,
+		'quota'		: 0,
+		'limit'		: 0,
+		'files'		: []
+	}
+	
+	try:
+		process = subprocess.Popen(job_cmd, shell=True,
+					stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+					stderr=subprocess.STDOUT)
+		if process:
+			output = process.stdout.read().rstrip().split(b'\n\n')
+			for ls_output in output:
+				ls_data = decode_ls_output_byuser(ls_output, user_name)
+				if ls_data:
+					data['quota'] = data['quota'] + ls_data['kbytes']
+					data['files'] = data['files'] + ls_data['files']
+				
+		return data
+
+	except Exception as err:
+		print("ERROR (get_user_utilisation_ls): %s" % err)
 		return False
 		
 def get_user_utilisation(find_type = "normal", user_name = "myuser", quota_directory = "/mydir", cmd_only = False):
-	""" Report user utilisation of a given directory tree """
-	
-	
-	if find_type == "generic":
-		job_cmd = f"find {quota_directory} -user {user_name} 2>/dev/null"
+	""" Report user utilisation of a given directory tree using find """
+		
 	if find_type == "lfs":
 		job_cmd = f"lfs find {quota_directory} -user {user_name} 2>/dev/null"
+	else:
+		job_cmd = f"find {quota_directory} -user {user_name} 2>/dev/null"
 	
 	if cmd_only:
 		return job_cmd
@@ -302,7 +612,55 @@ def get_user_utilisation(find_type = "normal", user_name = "myuser", quota_direc
 		return(data)
 
 	except Exception as err:
+		print("ERROR (get_user_utilisation): %s" % err)
 		return False
+		
+def get_user_orphaned_files_ls(find_type = "normal", username_list = None, quota_directory = "/mydir", cmd_only = False):
+	""" Get a list of files which are owned by users other than those in the provided username_list. """
+	
+	job_cmd = f"ls -alskLR {quota_directory} 2>/dev/null"
+	
+	if cmd_only:
+		return job_cmd
+	
+	data = {
+		'files' : [],	# A list of files that are found
+		'users' : {},	# A dictionary of users whose files are found, including space utilisation for each
+		'quota' : 0		# Sum of the entire space utilisation of the found files
+	}
+	
+	try:
+		process = subprocess.Popen(job_cmd, shell=True,
+					stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+					stderr=subprocess.STDOUT)
+		if process:
+			output = process.stdout.read().rstrip().split(b'\n\n')
+			for ls_output in output:
+				found_files = decode_ls_orphaned_files(ls_output, username_list)
+				for f in found_files:
+						data['files'].append(f)
+						
+						uid = f['username']
+						gid = f['groupname']
+						if uid not in data['users']:
+							data['users'][uid] = {
+								'files' : [],
+								'username' : "",
+								'uid' : uid,
+								'quota' : 0
+							}
+							
+						data['users'][uid]['files'].append(f)
+						data['users'][uid]['quota'] = data['users'][uid]['quota'] + f['kbytes']
+						
+						# INcrease the count of space used
+						data['quota'] = data['quota'] + f['kbytes']
+			return data
+
+	except Exception as err:
+		print("ERROR (get_user_orphaned_files_ls): %s" % err)
+		return False
+			
 		
 def get_user_orphaned_files(find_type = "normal", username_list = None, quota_directory = "/mydir", cmd_only = False):
 	""" Get a list of files which are owned by users other than those in the provided username_list. """

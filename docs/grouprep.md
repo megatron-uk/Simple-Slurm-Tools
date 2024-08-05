@@ -22,6 +22,7 @@ Optionally, in the case of a Lustre filesystem, the Lustre variant of the find u
 #### Example
 
    * **-nq** No Quota; disables quota-based utilisation calculations and switches on *find* and manual file-size metrics. Slower, but will work for any directory or filesystem tree, including those without quotas enabled
+   * **-ls** No Quota, and use a recursive *ls* command instead of *find*. This is generally fast, but due to the way ls, find, quota, du differ, may not be as accurate as other methods. However, it is usually 'good enough'.
    * **-csv** Data will be output in comma seperated value format
    * **-lfs** Use native Lustre *find* command instead of GNU findutils.
    * **groupname** The name of the unix group to report on
