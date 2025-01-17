@@ -52,7 +52,7 @@ generate_stats() {
 	echo "Extracting stats - please wait..."
 	
 	# Get total number of files
-	TOTAL_FILES=`wc -l ${LOG} | awk '{print $1}'`
+	TOTAL_FILES=`cat ${LOG} | grep -v ^/ | wc -l | awk '{print $1}'`
 	echo "- $TOTAL_FILES total files"
 	
 	# Get total file size
@@ -60,9 +60,18 @@ generate_stats() {
 	cat ${LOG} |  grep -v ^/ | awk '{print $5}' > ${LOG}.sub.bytes
 	while read file_bytes 
 	do
-		TOTAL_BYTES=$(($TOTAL_BYTES + $file_bytes))
+		if [ "$file_bytes" != "" ]
+		then
+			TOTAL_BYTES=$(($TOTAL_BYTES + $file_bytes))
+		fi
 	done < ${LOG}.sub.bytes
 	echo "- $TOTAL_BYTES total bytes"
+	TOTAL_KBYTES=$(($TOTAL_BYTES / 1024 ))
+	echo "- $TOTAL_KBYTES total kbytes"
+	TOTAL_MBYTES=$(($TOTAL_KBYTES / 1024 ))
+	echo "- $TOTAL_MBYTES total mbytes"
+	TOTAL_GBYTES=$(($TOTAL_MBYTES / 1024 ))
+	echo "- $TOTAL_GBYTES total gbytes"
 }
 
 extract_users() {
@@ -78,25 +87,28 @@ generate_user_stats() {
 	
 	u=$1
 	
-	grep " $u " ${LOG} > "${LOG}.sub.user.$u" 2>/dev/null
-
-	# How many files have the created
-	TOTAL_USER_FILES=`wc -l ${LOG}.sub.user.$u | awk '{print $1}'`
-	#echo "- $u"
-	#echo "-- $TOTAL_USER_FILES files"
+	if [ "$u" != "" ]
+	then
+		grep " $u " ${LOG} > "${LOG}.sub.user.$u" 2>/dev/null
 	
-	# How much disk space have they used
-	cat ${LOG}.sub.user.$u | awk '{print $5}' > ${LOG}.sub.user.$u.bytes
-	TOTAL_BYTES=0
-	while read file_bytes
-	do
-		TOTAL_BYTES=$(($TOTAL_BYTES + $file_bytes))
-	done < ${LOG}.sub.user.$u.bytes
-
-	#echo "-- $TOTAL_BYTES bytes"
-	#echo ""	
-	
-	echo "$DEST_DIR, ${u}, $TOTAL_USER_FILES, $TOTAL_BYTES"
+		# How many files have the created
+		TOTAL_USER_FILES=`wc -l ${LOG}.sub.user.$u | awk '{print $1}'`
+		#echo "- $u"
+		#echo "-- $TOTAL_USER_FILES files"
+		
+		# How much disk space have they used
+		cat ${LOG}.sub.user.$u | awk '{print $5}' > ${LOG}.sub.user.$u.bytes
+		TOTAL_BYTES=0
+		while read file_bytes
+		do
+			TOTAL_BYTES=$(($TOTAL_BYTES + $file_bytes))
+		done < ${LOG}.sub.user.$u.bytes
+		
+		LARGEST_BYTES=0
+		LARGEST_BYTES=`cat "${LOG}.sub.user.$u" | awk '{print $5}' | sort -nr | head -1`
+		
+		echo "$DEST_DIR, ${u}, $TOTAL_USER_FILES, $TOTAL_BYTES, $LARGEST_BYTES"
+	fi
 }
 
 ###########################################################
@@ -128,7 +140,7 @@ extract_users
 echo ""
 echo "Extracting per-user stats - please wait..."
 echo ""
-echo "Path, Username, Total Files, Total Bytes"
+echo "Path, Username, Total Files, Total Bytes, Largest File"
 cat ${LOG}.sub.users | while read u
 do
 	generate_user_stats $u
