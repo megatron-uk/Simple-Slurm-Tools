@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 """
 Simple Slurm Tools
@@ -21,6 +21,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import traceback
 import subprocess
 import datetime
+
+from lib.slurmcache import slurmCache
 
 #############################################################
 #
@@ -61,7 +63,7 @@ class SlurmJob():
 		self.job_id = None
 		self.subjobs = []
 		self.debug = debug
-
+		self.sc = slurmCache()
 		self.hostname_cache = {}
 
 	def expand_nodelist(self, nodelist = None):
@@ -272,6 +274,14 @@ class SlurmJob():
 
 		try:
 			jobs = []
+			
+			# Are the results of this job cmd previously cached?
+			res = self.sc.loadcmd(key = job_cmd)
+			# Yes - retrieve it
+			if res:
+				return res
+				
+			# No - run the cmd			
 			process = subprocess.Popen(job_cmd, shell=True,
 				stdin=subprocess.PIPE, stdout=subprocess.PIPE,
 				stderr=subprocess.STDOUT)
@@ -282,6 +292,9 @@ class SlurmJob():
 						outdata = self.set_rowsummary(stdout = line, expand_nodes = expand_nodes)
 						if outdata:
 							jobs.append(outdata)
+							
+					# Store the results
+					self.sc.storecmd(key = job_cmd, data = jobs)
 			else:
 				return False
 		except Exception as error:

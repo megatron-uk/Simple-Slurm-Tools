@@ -1,0 +1,288 @@
+#!/usr/bin/env python3
+
+"""
+Simple Slurm Tools
+Copyright (C) 2024 John Snowdon
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+"""
+
+import argparse
+import os
+import subprocess
+import sys
+
+from lib.posix import get_users, get_groups, get_users_from_groups
+from lib.posix import get_group_quota, get_group_utilisation, get_user_utilisation
+from lib.posix import get_group_utilisation_ls, get_user_utilisation_ls
+from lib.posix import get_user_orphaned_files, get_user_orphaned_files_ls
+
+####################################################################
+#
+# Audit a unix group and a given group file tree to find missing
+# users, orphaned files etc.
+#
+####################################################################
+
+AUTHOR		= "John Snowdon"
+URL			= "https://github.com/megatron-uk/Simple-Slurm-Tools"
+
+OUT_MODE		= "stats"
+FIND_MODE	= "quota"
+FIND_TYPE	= "generic"
+DIR_NAME		= "/tmp"
+BY_GROUP		= False
+ALL_USERS_S	= ""
+ALL_GROUPS_S	= ""
+ALL_USERS	= []
+ALL_GROUPS	= []
+ALL_USERS_EXCLUDE = []
+ALL_GROUPS_EXCLUDE = []
+
+def report_full(report = None):
+	""" Visual report """
+	
+	print("")
+	print("Group Report		Value")
+	print("============		=====")
+	print(f"Group name		{GROUP}")
+	if report['is_valid_group']:
+		print(f"Group exists		Yes")
+	else:
+		print(f"Group exists		No: Does not appear to be a real group!")
+		
+	if report['is_group_has_members']:
+		print(f"Group has members	Yes")
+	else:
+		print(f"Group has members	No: Unable to enumerate group members!")
+	
+	# Group quota/used space
+	if report['dir_exists'] is False:
+		print(f"Group folder		No: Group folder does not appear to exist!")
+	else:
+		print(f"Group folder		Yes: {args.dir_name}")
+
+	# Get find/du used space
+	if report['method'] == "find":
+		if report['group_utilisation']:
+			print(f"Total utilisation	{report['group_utilisation']['quota']} kbytes")
+		else:
+			print("Total utilisation	Warning! Unable to determine utilisation!")
+	else:
+		if report['group_utilisation']:
+			print(f"Total quota		{report['group_utilisation']['quota']} kbytes")
+		else:
+			print("Total quota		Warning! Unable to determine quota!")
+	
+	# Space utilisation of each member
+	if is_group_has_members:
+		print(f"Group user list...")
+		for user_data in report['user_utilisation']:
+			if user_data['data']:
+				print(f"- user {user_data['user']}		{user_data['data']['quota']} kbytes")
+			else:
+				print(f"- user {user_data['user']}		Warning! Unable to determine utilisation!")
+		
+	
+	# Space utilisation by non-members
+	print("")
+	print(f"Files that are owned by another group")
+	print("==================")
+	if report['alien_group_utilisation']:
+		cmd = get_group_utilisation(FIND_TYPE, GROUP, DIR_NAME, invert = True, cmd_only = True)
+		if len(report['alien_group_utilisation']['files']) > 0:
+			print(f"Total space		{report['alien_group_utilisation']['quota']} kbytes")
+			print(f"Total files		{len(report['alien_group_utilisation']['files'])} files")
+			print("\n* ^- This content may need a 'chgrp'")
+		else:
+			print("No alien group ownership found")
+		print(f"* Hint: {cmd}")
+	else:
+		print("Group Orphaned files		Warning! Unable to calculate utilisation of non-group files")
+		
+	# Number of files not owned by any user of the group
+	# Get a list of all files owned by users other than those in ALL_USERS
+	# These could be users who are no longer in this group
+	print("")
+	print("Files with owners no longer in this group")
+	print("==================")
+	if report['alien_user_utilisation']:
+		cmd = get_user_orphaned_files(FIND_TYPE, ALL_USERS, DIR_NAME, cmd_only = True)
+		if len(report['alien_user_utilisation']['files']) > 0:
+			print(f"Total space		{report['alien_user_utilisation']['quota']} kbytes")
+			print(f"Total files		{len(report['alien_user_utilisation']['files'])} files")
+			print(f"Total users		{len(report['alien_user_utilisation']['users'])} users")
+			print(f"Alien user list...")
+			for uid in report['alien_user_utilisation']['users']:
+				print(f"- uid {uid} / {report['alien_user_utilisation']['users'][uid]['username']}		{report['alien_user_utilisation']['users'][uid]['quota']} kbytes, in {len(report['alien_user_utilisation']['users'][uid]['files'])} files")
+			print("\n* ^- This content may need a 'chown'")
+		else:
+			print("No alien users found")
+		print(f"* Hint: {cmd}")
+		
+	else:
+		print("User Orphaned files	Warning! Unable to calculate utilisation of non-group-owner files")
+
+def report_csv(report = None):
+	""" Output grouprep report in csv format """
+
+def banner():
+	""" Text banner """
+	print("grouprep - A group audit & report tool")
+	print("========================================")
+	print("")
+	print("Part of Simple Slurm Tools")
+	print(f"Author: {AUTHOR}")
+	print(f"URL: {URL}")
+	print("")
+
+if __name__ == "__main__":
+
+	parser = argparse.ArgumentParser("diskrep")
+	parser.add_argument("group_name", help="The unix group to use in the report.", type=str)
+	parser.add_argument("dir_name", help="The directory path or filesystem to analyse for the group.", type=str)
+	parser.add_argument("-csv", help="Enable CSV output only.", action="store_true")
+	parser.add_argument("-lfs", help="Use native Lustre find and quota commands.", action="store_true")
+	parser.add_argument("-nq", help="Disable quota, use find/du: this will be slower.",
+		action="store_true")
+	parser.add_argument("-ls", help="Disable quota, use recursive ls: this should be fast.",
+		action="store_true")
+	args = parser.parse_args()
+
+	reports = []
+	users1 = []
+	users2 = []
+	users1_exclude = []
+	users2_exclude = []
+
+	is_valid_group = True
+	is_group_has_members = False
+
+	if args.nq:
+		FIND_MODE = "find"
+		
+	if args.ls:
+		FIND_MODE = "ls"
+
+	if args.csv:
+		OUT_MODE = "csv"
+
+	if OUT_MODE != "csv":
+		banner()
+		
+	if args.lfs:
+		for prefix in os.environ['PATH'].split(os.pathsep):
+			filename = os.path.join(prefix, 'lfs')
+			if os.path.exists(filename):
+				FIND_TYPE = "lfs"
+
+	ALL_GROUPS_S = args.group_name
+	ALL_GROUPS = get_groups(ALL_GROUPS_S)
+	if len(ALL_GROUPS) < 1:
+		GROUP = ALL_GROUPS_S
+		is_valid_group = False
+	else:
+		GROUP = ALL_GROUPS[0]
+		users2 = get_users_from_groups(ALL_GROUPS)
+	
+	if len(users2) > 0:
+		is_group_has_members = True
+
+	if args.dir_name:
+		
+			DIR_NAME = args.dir_name
+			
+			ALL_USERS = list(set(users1 + users2))
+			ALL_USERS_EXCLUDE = list(set(users1_exclude + users2_exclude))
+
+			report = {
+				'group'					: GROUP,
+				'method'					: FIND_MODE,
+				'fs_type'				: FIND_TYPE,
+				'dir_name' 				: DIR_NAME,
+				'is_valid_group' 		: is_valid_group,
+				'is_group_has_members' 	: is_group_has_members,
+				'dir_exists' 			: os.path.exists(args.dir_name),
+				'group_utilisation'		: None,
+				'user_utilisation'		: [],
+				'alien_group_utilisation' : None,
+				'alien_user_utilisation'	: None,
+			}
+
+			if OUT_MODE != "csv":
+				print(f"Analysing	: {DIR_NAME}")
+				print(f"Method		: {FIND_MODE}")
+				print(f"FS type		: {FIND_TYPE}")
+				print(f"Group mode	: {BY_GROUP}")
+				print(f"Users		: {len(ALL_USERS)} users")
+				print(f"Groups		: {len(ALL_GROUPS)} group ({GROUP})")
+				print("")
+
+
+			if OUT_MODE != "csv":
+				print("Please wait, retrieving group space utilisation: ")
+			# Overall space utilisation by this group
+			if report['method'] == "find":
+				report['group_utilisation'] = get_group_utilisation(FIND_TYPE, GROUP, DIR_NAME)
+			if report['method'] == "ls":
+				report['group_utilisation'] = get_group_utilisation_ls(FIND_TYPE, GROUP, DIR_NAME)
+			else:
+				report['group_utilisation'] = get_group_quota(FIND_TYPE, GROUP, DIR_NAME)
+
+			# Overall space utilisation by users in this group
+			if OUT_MODE != "csv":
+				print("Please wait, retrieving individual user space utilisation: ", end="")
+			if report['is_group_has_members']:
+				for user in ALL_USERS:
+					if OUT_MODE != "csv":
+						print(".", end="")
+					user_data = {
+						'user' : user,
+						'data' : get_user_utilisation(FIND_TYPE, user, DIR_NAME) 
+					}
+					report['user_utilisation'].append(user_data)
+			if OUT_MODE != "csv":
+				print("")
+
+			# Overall space utilisation by files that are set to a different group
+			if OUT_MODE != "csv":
+				print("Please wait, retrieving alien group space utilisation: ")
+			if report['method'] == "ls":
+				report['alien_group_utilisation'] = get_group_utilisation_ls(FIND_TYPE, GROUP, DIR_NAME, invert = True)
+			else:
+				report['alien_group_utilisation'] = get_group_utilisation(FIND_TYPE, GROUP, DIR_NAME, invert = True)
+	
+			# Overall space utilisation by users NOT in this group
+			if OUT_MODE != "csv":
+				print("Please wait, retrieving alien user space utilisation: ")
+			if report['method'] == "ls":
+				report['alien_user_utilisation'] = get_user_orphaned_files_ls(FIND_TYPE, ALL_USERS, DIR_NAME)
+			else:
+				report['alien_user_utilisation'] = get_user_orphaned_files(FIND_TYPE, ALL_USERS, DIR_NAME)
+
+			if OUT_MODE != "csv":
+				# Main visual report	
+				report_full(report)
+				print("")
+				print("OK")
+				sys.exit(0)
+				
+			else:
+				# Output in CSV format
+				report_csv(report)
+				sys.exit(0)
+
+	else:
+		print("")
+		sys.exit(0)
