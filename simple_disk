@@ -1,60 +1,89 @@
 #!/bin/bash
 
 DEST_DIR=$1
-LOG=simple_disk.log
+LOG=`mktemp`
 
-echo "simple_disk"
-echo "==========="
+banner() {
+	echo "simple_disk"
+	echo "==========="
+	
+	echo ""
+	echo "Part of Simple-Slurm-Tools"
+	echo "https://github.com/megatron-uk/Simple-Slurm-Tools"
+}
 
-echo ""
-echo "Part of Simple-Slurm-Tools"
-echo "https://github.com/megatron-uk/Simple-Slurm-Tools"
-echo ""
+help() {
+	echo ""
+	echo "Useage:"
+	echo ""
+	echo "$0 DIRECTORY_NAME"
+	echo ""
+	echo "$0 will produce a listing of all files found under a given directory."
+	echo "The listing will be used to produce a tally by username, with each "
+	echo "user listed along with the number of files and total bytes of files"
+	echo "they are responsible for."
+	echo ""
+	echo "This tool is useful when no quota is enabled on a filesystem and/or the"
+	echo "the underlying filesystem is slow for metadata related queries (in the"
+	echo "case of such tools as 'find', 'stat', etc)"
+}
 
-echo "Target directory: ${DEST_DIR}"
-if [ -d "${DEST_DIR}" ]
-then
-	echo "Target: Found"
-else
-	echo "Target: Not found, or not accessible!"
-fi
 
-echo ""
-echo "Generating Directory Listing - please wait..."
-ls -l -k -A -R ${DEST_DIR} | grep -v "total " | grep -v ^d | strings > ${LOG}
+generate_list() {
+	# Generate the main log file
+	
+	echo ""
+	echo "Generating Directory Listing - please wait..."
+	ls -l -k -A -R ${DEST_DIR} 2>/dev/null | grep -v "total " | grep -v ^d | strings > ${LOG}
+	
+	if [ -s "${LOG}" ]
+	then
+		echo "- Done"
+	else
+		echo "- ERROR, log file is empty!"
+		exit 1
+	fi
+}
 
-echo ""
-echo "Extracting stats - please wait..."
+generate_stats() {
+	# Generate top level stats from the log file
+	
+	echo ""
+	echo "Extracting stats - please wait..."
+	
+	# Get total number of files
+	TOTAL_FILES=`wc -l ${LOG} | awk '{print $1}'`
+	echo "- $TOTAL_FILES total files"
+	
+	# Get total file size
+	TOTAL_BYTES=0
+	cat ${LOG} |  grep -v ^/ | awk '{print $5}' > ${LOG}.sub.bytes
+	while read file_bytes 
+	do
+		TOTAL_BYTES=$(($TOTAL_BYTES + $file_bytes))
+	done < ${LOG}.sub.bytes
+	echo "- $TOTAL_BYTES total bytes"
+}
 
-# Get total number of files
-TOTAL_FILES=`wc -l ${LOG} | awk '{print $1}'`
-echo "- $TOTAL_FILES total files"
+extract_users() {
+	# Get list of unique usernames from the log file
+	
+	cat ${LOG} | grep -v ^/ | awk '{print $3}' | sort | uniq > ${LOG}.sub.users
+	TOTAL_USERS=`wc -l ${LOG}.sub.users | awk '{print $1}'`
+	echo "- $TOTAL_USERS users"	
+}
 
-# Get total file size
-TOTAL_BYTES=0
-cat ${LOG} |  grep -v ^/ | awk '{print $5}' > ${LOG}.sub.bytes
-while read file_bytes 
-do
-	TOTAL_BYTES=$(($TOTAL_BYTES + $file_bytes))
-done < ${LOG}.sub.bytes
-echo "- $TOTAL_BYTES total bytes"
-
-# Get list of unique usernames
-cat ${LOG} | grep -v ^/ | awk '{print $3}' | sort | uniq > ${LOG}.sub.users
-TOTAL_USERS=`wc -l ${LOG}.sub.users | awk '{print $1}'`
-echo "- $TOTAL_USERS users"
-
-# For each user
-echo ""
-echo "Extracting per-user stats - please wait..."
-cat ${LOG}.sub.users | while read u
-do
-	grep " $u " ${LOG} > "${LOG}.sub.user.$u"
+generate_user_stats() {
+	# Generate user stats from a pre-existing log.sub.user.username file
+	
+	u=$1
+	
+	grep " $u " ${LOG} > "${LOG}.sub.user.$u" 2>/dev/null
 
 	# How many files have the created
 	TOTAL_USER_FILES=`wc -l ${LOG}.sub.user.$u | awk '{print $1}'`
-	echo "- $u"
-	echo "-- $TOTAL_USER_FILES files"
+	#echo "- $u"
+	#echo "-- $TOTAL_USER_FILES files"
 	
 	# How much disk space have they used
 	cat ${LOG}.sub.user.$u | awk '{print $5}' > ${LOG}.sub.user.$u.bytes
@@ -64,10 +93,46 @@ do
 		TOTAL_BYTES=$(($TOTAL_BYTES + $file_bytes))
 	done < ${LOG}.sub.user.$u.bytes
 
-	echo "-- $TOTAL_BYTES bytes"
-	echo ""
+	#echo "-- $TOTAL_BYTES bytes"
+	#echo ""	
+	
+	echo "$DEST_DIR, ${u}, $TOTAL_USER_FILES, $TOTAL_BYTES"
+}
+
+###########################################################
+#
+# Main body begins here
+#
+###########################################################
+
+banner
+
+if [ "$DEST_DIR" == "" ]
+then
+	help
+	exit 0
+fi
+
+echo "Target directory: ${DEST_DIR}"
+if [ -d "${DEST_DIR}" ]
+then
+	echo "Target: Found"
+else
+	echo "Target: Not found, or not accessible!"
+fi
+
+generate_list
+generate_stats
+extract_users
+
+echo ""
+echo "Extracting per-user stats - please wait..."
+echo ""
+echo "Path, Username, Total Files, Total Bytes"
+cat ${LOG}.sub.users | while read u
+do
+	generate_user_stats $u
 done
 
-rm -v ${LOG}.sub.*
-rm -v ${LOG}.sub
-#rm -v ${LOG}
+rm ${LOG}.*
+rm ${LOG}
