@@ -88,7 +88,7 @@ getUsersForDest() {
 			find "$DEST_DIR" -xdev -type f -printf "%u\n" 2>/dev/null > "$LOG.userlist.tmp"
 		fi
 		cat "$LOG.userlist.tmp" | sort | uniq > "$LOG.userlist"
-		rm "$LOG.userlist.tmp"
+		rm -f "$LOG.userlist.tmp"
 		TOTAL_USERS=`wc -l "$LOG.userlist" | awk '{print $1}'`
 		
 		if [ "$VERBOSE" == "y" ]
@@ -144,7 +144,7 @@ getGroupsForDest() {
 			find "$DEST_DIR" -xdev -type f -printf "%g\n" 2>/dev/null > "$LOG.grouplist.tmp"
 		fi
 		cat "$LOG.grouplist.tmp" | sort | uniq > "$LOG.grouplist"
-		rm "$LOG.grouplist.tmp"
+		rm -f "$LOG.grouplist.tmp"
 		TOTAL_GROUPS=`wc -l "$LOG.grouplist" | awk '{print $1}'`
 		
 		if [ "$VERBOSE" == "y" ]
