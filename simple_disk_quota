@@ -95,7 +95,7 @@ getUsersForDest() {
 		then
 			echo $USER_NAMES | sed 's/,/\n/g' | sort | uniq | while read u
 			do
-				echo "$u" > "$LOG.userlist"
+				echo "$u" >> "$LOG.userlist"
 			done
 		else
 			if [ "$LFS_QUOTA" == "y" ]
@@ -162,7 +162,7 @@ getGroupsForDest() {
 		then
 			echo $GROUP_NAMES | sed 's/,/\n/g' | sort | uniq | while read g
 			do
-				echo "$g" > "$LOG.grouplist"
+				echo "$g" >> "$LOG.grouplist"
 			done
 		else
 			if [ "$LFS_QUOTA" == "y" ]
