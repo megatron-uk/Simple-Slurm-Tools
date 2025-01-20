@@ -139,9 +139,9 @@ getQuotaForUser() {
 	then	
 		if [ "$LFS_QUOTA" == "y" ]
 		then
-			lfs quota -u $user $DEST_DIR | grep $DEST_DIR 2>/dev/null | awk '{print $2}' > "$LOG.userlist.quota.$user"
+			lfs quota -u $user $DEST_DIR | grep $DEST_DIR 2>/dev/null | awk '{print $2}' | sed 's/\*//g' > "$LOG.userlist.quota.$user"
 		else
-			quota -u $user | grep $DEST_DIR 2>/dev/null | awk '{print $2}' > "$LOG.userlist.quota.$user"
+			quota -u $user | grep $DEST_DIR 2>/dev/null | awk '{print $2}' | sed 's/\*//g' > "$LOG.userlist.quota.$user"
 		fi
 		USER_BYTES=`cat $LOG.userlist.quota.$user`
 		echo "user_quota,$DEST_DIR,$user,$USER_BYTES"
@@ -206,9 +206,9 @@ getQuotaForGroup() {
 	then
 		if [ "$LFS_QUOTA" == "y" ]
 		then
-			lfs quota -g $group $DEST_DIR | grep $DEST_DIR 2>/dev/null | awk '{print $2}' > "$LOG.grouplist.quota.$group"
+			lfs quota -g $group $DEST_DIR | grep $DEST_DIR 2>/dev/null | awk '{print $2}' | sed 's/\*//g' > "$LOG.grouplist.quota.$group"
 		else
-			quota -g $group | grep $DEST_DIR 2>/dev/null | awk '{print $2}' > "$LOG.grouplist.quota.$group"
+			quota -g $group | grep $DEST_DIR 2>/dev/null | awk '{print $2}' | sed 's/\*//g' > "$LOG.grouplist.quota.$group"
 		fi
 		GROUP_BYTES=`cat $LOG.grouplist.quota.$group`
 		echo "group_quota,$DEST_DIR,$group,$GROUP_BYTES"
