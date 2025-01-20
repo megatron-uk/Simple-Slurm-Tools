@@ -106,8 +106,8 @@ getUsersForDest() {
 			fi
 			cat "$LOG.userlist.tmp" | sort | uniq > "$LOG.userlist"
 			rm -f "$LOG.userlist.tmp"
-			TOTAL_USERS=`wc -l "$LOG.userlist" | awk '{print $1}'`
 		fi
+		TOTAL_USERS=`wc -l "$LOG.userlist" | awk '{print $1}'`
 		
 		if [ "$VERBOSE" == "y" ]
 		then
@@ -138,9 +138,9 @@ getQuotaForUser() {
 	then	
 		if [ "$LFS_QUOTA" == "y" ]
 		then
-			lfs quota -u $user $DEST_DIR | grep $DEST_DIR 2>/dev/null > "$LOG.userlist.quota.$user"
+			lfs quota -u $user $DEST_DIR | grep $DEST_DIR 2>/dev/null | awk '{print $2}' > "$LOG.userlist.quota.$user"
 		else
-			quota -u $user | grep $DEST_DIR 2>/dev/null > "$LOG.userlist.quota.$user"
+			quota -u $user | grep $DEST_DIR 2>/dev/null | awk '{print $2}' > "$LOG.userlist.quota.$user"
 		fi
 	fi
 }
@@ -170,8 +170,8 @@ getGroupsForDest() {
 			fi
 			cat "$LOG.grouplist.tmp" | sort | uniq > "$LOG.grouplist"
 			rm -f "$LOG.grouplist.tmp"
-			TOTAL_GROUPS=`wc -l "$LOG.grouplist" | awk '{print $1}'`
 		fi
+		TOTAL_GROUPS=`wc -l "$LOG.grouplist" | awk '{print $1}'`
 		
 		if [ "$VERBOSE" == "y" ]
 		then
@@ -203,9 +203,9 @@ getQuotaForGroup() {
 	then
 		if [ "$LFS_QUOTA" == "y" ]
 		then
-			lfs quota -g $group $DEST_DIR | grep $DEST_DIR 2>/dev/null > "$LOG.grouplist.quota.$group"
+			lfs quota -g $group $DEST_DIR | grep $DEST_DIR 2>/dev/null | awk '{print $2}' > "$LOG.grouplist.quota.$group"
 		else
-			quota -g $group | grep $DEST_DIR 2>/dev/null > "$LOG.grouplist.quota.$group"
+			quota -g $group | grep $DEST_DIR 2>/dev/null | awk '{print $2}' > "$LOG.grouplist.quota.$group"
 		fi
 	fi
 }
@@ -258,5 +258,5 @@ getUsersForDest
 getGroupsForDest
 getQuotaForAllUsers
 getQuotaForAllGroups
-#exitScript
+exitScript
 exit 0
