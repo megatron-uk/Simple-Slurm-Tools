@@ -1,0 +1,231 @@
+#!/bin/bash
+
+DEST_DIR=""
+LFS_QUOTA="n"
+USER_MODE="y"
+GROUP_MODE="n"
+VERBOSE="n"
+TOTAL_USERS=0
+TOTAL_GROUPS=0
+LOG=`mktemp`
+
+banner() {
+	# Tool banner
+	echo "simple_disk_quota"
+	echo "================="
+	
+	echo ""
+	echo "Part of Simple-Slurm-Tools"
+	echo "https://github.com/megatron-uk/Simple-Slurm-Tools"
+}
+
+help() {
+	# Show help text
+	echo ""
+	echo "Useage:"
+	echo ""
+	echo "$0 DIRECTORY_NAME"
+	echo ""
+	echo "-u User quotas [default: $USER_MODE]"
+	echo "-g Group quotas [default: $GROUP_MODE]"
+	echo "-l Use LFS quota tool"
+	echo "-v Verbose output"
+	echo ""
+	echo "$0 will produce a quota listing for all users or groups found under"
+	echo "a given directory."
+}
+
+showOptions() {
+	# Print options
+	if [ "$VERBOSE" == "y" ]
+	then
+		banner
+		echo ""
+		echo "DESTINATION = $DEST_DIR"
+		echo "USER mode = $USER_MODE"
+		echo "GROUP mode = $GROUP_MODE"
+		echo "LFS mode = $LFS_QUOTA"
+		echo "VERBOSE = $VERBOSE"
+	fi
+}
+
+testDest() {
+	# Test destination exists
+	if [ -d "$DEST_DIR" ]
+	then
+		if [ "$VERBOSE" == "y" ]
+		then
+			echo "DESTINATION Found [$DEST_DIR]"
+		fi
+	else
+		echo ""
+		echo "Error, DESTINATION not found [$DEST_DIR]"
+		exitScript
+		exit 1
+	fi
+}
+
+exitScript() {
+	# Exit, cleaning up log file(s)
+	rm "$LOG"
+	rm "$LOG"\.*
+}
+
+getUsersForDest() {
+	# Get a list of users who have files under DEST_DIR	
+	if [ "$USER_MODE" == "y" ]
+	then
+		if [ "$VERBOSE" == "y" ]
+		then
+			echo ""
+			echo "Please wait, extracting user list..."
+		fi
+		
+		if [ "$LFS_QUOTA" == "y" ]
+		then
+			lfs find "$DEST_DIR" -xdev -type f -printf "%u\n" 2>/dev/null > "$LOG.userlist.tmp"
+		else
+			find "$DEST_DIR" -xdev -type f -printf "%u\n" 2>/dev/null > "$LOG.userlist.tmp"
+		fi
+		cat "$LOG.userlist.tmp" | sort | uniq > "$LOG.userlist"
+		rm "$LOG.userlist.tmp"
+		TOTAL_USERS=`wc -l "$LOG.userlist" | awk '{print $1}'`
+		
+		if [ "$VERBOSE" == "y" ]
+		then
+			echo "- Done [$TOTAL_USERS users]"
+		fi
+	fi
+}
+
+getQuotaForAllUsers() {
+	if [ "$USER_MODE" == "y" ]
+	then
+		if [ "$VERBOSE" == "y" ]
+		then
+			echo ""
+			echo "Please wait, retrieving quotas for users..."
+		fi
+		cat "$LOG.userlist" | while read u
+		do
+			getQuotaForUser $u
+		done
+	fi
+}
+
+getQuotaForUser() {
+	# Get a quota for an individual user
+	user=$1
+	if [ "$USER_MODE" == "y" ]
+	then	
+		if [ "$LFS_QUOTA" == "y" ]
+		then
+			lfs quota -u $user $DEST_DIR | grep $DEST_DIR 2>/dev/null > "$LOG.userlist.quota.$user"
+		else
+			quota -u $user | grep $DEST_DIR 2>/dev/null > "$LOG.userlist.quota.$user"
+		fi
+	fi
+}
+
+getGroupsForDest() {
+	# Get a list of groups who have files under DEST_DIR
+	if [ "$GROUP_MODE" == "y" ]
+	then
+		if [ "$VERBOSE" == "y" ]
+		then
+			echo ""
+			echo "Please wait, extracting group list..."
+		fi
+		
+		if [ "$LFS_QUOTA" == "y" ]
+		then
+			lfs find "$DEST_DIR" -xdev -type f -printf "%g\n" 2>/dev/null > "$LOG.grouplist.tmp"
+		else
+			find "$DEST_DIR" -xdev -type f -printf "%g\n" 2>/dev/null > "$LOG.grouplist.tmp"
+		fi
+		cat "$LOG.grouplist.tmp" | sort | uniq > "$LOG.grouplist"
+		rm "$LOG.grouplist.tmp"
+		TOTAL_GROUPS=`wc -l "$LOG.grouplist" | awk '{print $1}'`
+		
+		if [ "$VERBOSE" == "y" ]
+		then
+			echo "- Done [$TOTAL_GROUPS groups]"
+		fi
+	fi
+}
+
+getQuotaForAllGroups() {
+	#
+	if [ "$GROUP_MODE" == "y" ]
+	then
+		if [ "$VERBOSE" == "y" ]
+		then
+			echo ""
+			echo "Please wait, retrieving quotas for groups..."
+		fi
+		cat "$LOG.grouplist" | while read g
+		do
+			getQuotaForGroup $g
+		done
+	fi
+}
+
+getQuotaForGroup() {
+	#
+	group=$1
+	if [ "$GROUP_MODE" == "y" ]
+	then
+		if [ "$LFS_QUOTA" == "y" ]
+		then
+			lfs quota -g $group $DEST_DIR | grep $DEST_DIR 2>/dev/null > "$LOG.grouplist.quota.$group"
+		else
+			quota -g $group | grep $DEST_DIR 2>/dev/null > "$LOG.grouplist.quota.$group"
+		fi
+	fi
+}
+
+########################################
+
+while getopts ":hugd:vl" option; do
+	case $option in
+		h) # display Help
+			banner
+			help
+			exitScript
+			exit 1;;
+		u) # User quota
+			USER_MODE="y";;
+		g) # Group quota
+			GROUP_MODE="y";;
+		d) # Destination directory
+			DEST_DIR=$OPTARG;;
+		l) # Enable LFS
+			LFS_QUOTA="y";;
+		v) # Verbose
+			VERBOSE="y";;
+		\?) # Unknown option
+			banner
+			echo "\nError, Invalid option"
+			help
+			exitScript
+			exit 1;;
+	esac
+done
+
+if [ "$DEST_DIR" = "" ]
+then
+	banner
+	echo "\nError, you must set the target directory"
+	help
+	exitScript
+	exit 1
+fi
+
+showOptions
+testDest
+getUsersForDest
+getGroupsForDest
+getQuotaForAllUsers
+getQuotaForAllGroups
+#exitScript
+exit 0
