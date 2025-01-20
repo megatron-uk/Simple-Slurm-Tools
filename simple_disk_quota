@@ -67,8 +67,8 @@ testDest() {
 
 exitScript() {
 	# Exit, cleaning up log file(s)
-	rm "$LOG"
-	rm "$LOG"\.*
+	rm -f "$LOG"
+	rm -f "$LOG"\.*
 }
 
 getUsersForDest() {
