@@ -7,6 +7,8 @@ GROUP_MODE="n"
 VERBOSE="n"
 TOTAL_USERS=0
 TOTAL_GROUPS=0
+USER_NAMES=""
+GROUP_NAMES=""
 LOG=`mktemp`
 
 banner() {
@@ -30,9 +32,15 @@ help() {
 	echo "-g Group quotas [default: $GROUP_MODE]"
 	echo "-l Use LFS quota tool"
 	echo "-v Verbose output"
+	echo "-U Pass a list of usernames instead of using 'find' to enumerate users"
+	echo "-G Pass a list of groups instead of using 'find' to enumerate groups"
 	echo ""
 	echo "$0 will produce a quota listing for all users or groups found under"
 	echo "a given directory."
+	echo ""
+	echo "You may pass a list of names to skip the use of 'find' enumerating"
+	echo "all files under the destination directory. e.g."
+	echo "-U bob,alice,sue -G users,sudo,dev"
 }
 
 showOptions() {
@@ -81,15 +89,23 @@ getUsersForDest() {
 			echo "Please wait, extracting user list..."
 		fi
 		
-		if [ "$LFS_QUOTA" == "y" ]
+		if [ "$USER_NAMES" != "" ]
 		then
-			lfs find "$DEST_DIR" -xdev -type f -printf "%u\n" 2>/dev/null > "$LOG.userlist.tmp"
+			echo $USER_NAMES | sed 's/,/\n/g' | sort | uniq | while read u
+			do
+				echo "$u" > "$LOG.userlist"
+			done
 		else
-			find "$DEST_DIR" -xdev -type f -printf "%u\n" 2>/dev/null > "$LOG.userlist.tmp"
+			if [ "$LFS_QUOTA" == "y" ]
+			then
+				lfs find "$DEST_DIR" -xdev -type f -printf "%u\n" 2>/dev/null > "$LOG.userlist.tmp"
+			else
+				find "$DEST_DIR" -xdev -type f -printf "%u\n" 2>/dev/null > "$LOG.userlist.tmp"
+			fi
+			cat "$LOG.userlist.tmp" | sort | uniq > "$LOG.userlist"
+			rm -f "$LOG.userlist.tmp"
+			TOTAL_USERS=`wc -l "$LOG.userlist" | awk '{print $1}'`
 		fi
-		cat "$LOG.userlist.tmp" | sort | uniq > "$LOG.userlist"
-		rm -f "$LOG.userlist.tmp"
-		TOTAL_USERS=`wc -l "$LOG.userlist" | awk '{print $1}'`
 		
 		if [ "$VERBOSE" == "y" ]
 		then
@@ -137,15 +153,23 @@ getGroupsForDest() {
 			echo "Please wait, extracting group list..."
 		fi
 		
-		if [ "$LFS_QUOTA" == "y" ]
+		if [ "$GROUP_NAMES" != "" ]
 		then
-			lfs find "$DEST_DIR" -xdev -type f -printf "%g\n" 2>/dev/null > "$LOG.grouplist.tmp"
+			echo $GROUP_NAMES | sed 's/,/\n/g' | sort | uniq | while read g
+			do
+				echo "$g" > "$LOG.grouplist"
+			done
 		else
-			find "$DEST_DIR" -xdev -type f -printf "%g\n" 2>/dev/null > "$LOG.grouplist.tmp"
+			if [ "$LFS_QUOTA" == "y" ]
+			then
+				lfs find "$DEST_DIR" -xdev -type f -printf "%g\n" 2>/dev/null > "$LOG.grouplist.tmp"
+			else
+				find "$DEST_DIR" -xdev -type f -printf "%g\n" 2>/dev/null > "$LOG.grouplist.tmp"
+			fi
+			cat "$LOG.grouplist.tmp" | sort | uniq > "$LOG.grouplist"
+			rm -f "$LOG.grouplist.tmp"
+			TOTAL_GROUPS=`wc -l "$LOG.grouplist" | awk '{print $1}'`
 		fi
-		cat "$LOG.grouplist.tmp" | sort | uniq > "$LOG.grouplist"
-		rm -f "$LOG.grouplist.tmp"
-		TOTAL_GROUPS=`wc -l "$LOG.grouplist" | awk '{print $1}'`
 		
 		if [ "$VERBOSE" == "y" ]
 		then
@@ -186,7 +210,7 @@ getQuotaForGroup() {
 
 ########################################
 
-while getopts ":hugd:vl" option; do
+while getopts ":hugd:vlU:G:" option; do
 	case $option in
 		h) # display Help
 			banner
@@ -195,8 +219,12 @@ while getopts ":hugd:vl" option; do
 			exit 1;;
 		u) # User quota
 			USER_MODE="y";;
+		U) # User list
+			USER_NAMES=$OPTARG;;
 		g) # Group quota
 			GROUP_MODE="y";;
+		G) # Group list
+			GROUP_NAMES=$OPTARG;;
 		d) # Destination directory
 			DEST_DIR=$OPTARG;;
 		l) # Enable LFS
@@ -215,7 +243,8 @@ done
 if [ "$DEST_DIR" = "" ]
 then
 	banner
-	echo "\nError, you must set the target directory"
+	echo ""
+	echo "Error, you must set the target directory"
 	help
 	exitScript
 	exit 1
