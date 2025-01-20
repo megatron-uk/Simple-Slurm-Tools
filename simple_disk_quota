@@ -51,7 +51,9 @@ showOptions() {
 		echo ""
 		echo "DESTINATION = $DEST_DIR"
 		echo "USER mode = $USER_MODE"
+		echo "USER list = $USER_NAMES"
 		echo "GROUP mode = $GROUP_MODE"
+		echo "GROUP list = $GROUP_NAMES"
 		echo "LFS mode = $LFS_QUOTA"
 		echo "VERBOSE = $VERBOSE"
 	fi
