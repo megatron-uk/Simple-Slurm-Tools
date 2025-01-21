@@ -245,7 +245,7 @@ if __name__ == "__main__":
 
 			# Overall space utilisation by users in this group
 			if OUT_MODE != "csv":
-				print("Please wait, retrieving individual user space utilisation: ", end="")
+				print("Please wait, retrieving individual user space utilisation: ")
 			if report['is_group_has_members']:
 				for user in ALL_USERS:
 					if OUT_MODE != "csv":
@@ -257,8 +257,6 @@ if __name__ == "__main__":
 					report['user_utilisation'].append(user_data)
 			if OUT_MODE != "csv":
 				print("- Done")
-			if OUT_MODE != "csv":
-				print("")
 
 			# Overall space utilisation by files that are set to a different group
 			if OUT_MODE != "csv":
