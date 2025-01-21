@@ -240,6 +240,8 @@ if __name__ == "__main__":
 				report['group_utilisation'] = get_group_utilisation_ls(FIND_TYPE, GROUP, DIR_NAME)
 			else:
 				report['group_utilisation'] = get_group_quota(FIND_TYPE, GROUP, DIR_NAME)
+			if OUT_MODE != "csv":
+				print("- Done")
 
 			# Overall space utilisation by users in this group
 			if OUT_MODE != "csv":
@@ -254,6 +256,8 @@ if __name__ == "__main__":
 					}
 					report['user_utilisation'].append(user_data)
 			if OUT_MODE != "csv":
+				print("- Done")
+			if OUT_MODE != "csv":
 				print("")
 
 			# Overall space utilisation by files that are set to a different group
@@ -263,7 +267,9 @@ if __name__ == "__main__":
 				report['alien_group_utilisation'] = get_group_utilisation_ls(FIND_TYPE, GROUP, DIR_NAME, invert = True)
 			else:
 				report['alien_group_utilisation'] = get_group_utilisation(FIND_TYPE, GROUP, DIR_NAME, invert = True)
-	
+			if OUT_MODE != "csv":
+				print("- Done")
+				
 			# Overall space utilisation by users NOT in this group
 			if OUT_MODE != "csv":
 				print("Please wait, retrieving alien user space utilisation: ")
@@ -271,7 +277,9 @@ if __name__ == "__main__":
 				report['alien_user_utilisation'] = get_user_orphaned_files_ls(FIND_TYPE, ALL_USERS, DIR_NAME)
 			else:
 				report['alien_user_utilisation'] = get_user_orphaned_files(FIND_TYPE, ALL_USERS, DIR_NAME)
-
+			if OUT_MODE != "csv":
+				print("- Done")
+				
 			if OUT_MODE != "csv":
 				# Main visual report	
 				report_full(report)
