@@ -491,6 +491,8 @@ def get_group_utilisation(find_type = "normal", group_name = "mygroup", quota_di
 	}
 	
 	try:
+		if verbose:
+			print(f"Running {job_cmd}...")
 		process = subprocess.Popen(job_cmd, shell=True,
 					stdin=subprocess.PIPE, stdout=subprocess.PIPE,
 					stderr=subprocess.STDOUT)
@@ -499,8 +501,7 @@ def get_group_utilisation(find_type = "normal", group_name = "mygroup", quota_di
 			if len(output) > 1:
 				found_files_b = output
 				found_files = []
-				if verbose:
-					print(f"Running {job_cmd}...")
+				
 				for f in found_files_b:
 					try:
 						found_files.append(f.decode())
@@ -565,7 +566,7 @@ def get_user_utilisation_ls(find_type = "normal", user_name = "myuser", quota_di
 		print("ERROR (get_user_utilisation_ls): %s" % err)
 		return False
 		
-def get_user_utilisation(find_type = "normal", user_name = "myuser", quota_directory = "/mydir", cmd_only = False):
+def get_user_utilisation(find_type = "normal", user_name = "myuser", quota_directory = "/mydir", cmd_only = False, verbose = False):
 	""" Report user utilisation of a given directory tree using find """
 		
 	if find_type == "lfs":
@@ -584,6 +585,8 @@ def get_user_utilisation(find_type = "normal", user_name = "myuser", quota_direc
 	}
 	
 	try:
+		if verbose:
+			print(f"Running {job_cmd}...")
 		process = subprocess.Popen(job_cmd, shell=True,
 					stdin=subprocess.PIPE, stdout=subprocess.PIPE,
 					stderr=subprocess.STDOUT)
@@ -600,6 +603,8 @@ def get_user_utilisation(find_type = "normal", user_name = "myuser", quota_direc
 						#print(f"Error, {e}")
 						pass
 				# Sum the total capacity used by each file
+				if verbose:
+					print(f"Decoding {len(found_files)}...")
 				for f in found_files:
 					try:
 						file_data = os.stat(f)

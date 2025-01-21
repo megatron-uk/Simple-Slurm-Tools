@@ -255,7 +255,7 @@ if __name__ == "__main__":
 						print(".", end="")
 					user_data = {
 						'user' : user,
-						'data' : get_user_utilisation(FIND_TYPE, user, DIR_NAME) 
+						'data' : get_user_utilisation(FIND_TYPE, user, DIR_NAME, verbose = VERBOSE) 
 					}
 					report['user_utilisation'].append(user_data)
 			if OUT_MODE != "csv":
