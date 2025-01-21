@@ -86,7 +86,7 @@ def get_user_quota(find_type = "normal", user_name = "myname", quota_directory =
 	""" Get quota details for a given username and mount point """
 	
 	if find_type == "lfs":
-		job_cmd = f"lfs quota -u {user_name} 2>/dev/null {quota_directory} | grep {quota_directory}"
+		job_cmd = f"lfs quota -u {user_name} 2>/dev/null | grep {quota_directory}"
 	else:
 		job_cmd = f"quota -u {user_name} --show-mntpoint -w 2>/dev/null | grep {quota_directory}"
 	
@@ -140,7 +140,7 @@ def get_group_quota(find_type = "normal", group_name = "mygroup", quota_director
 	""" Get quota details for a given group and mount point """
 	
 	if find_type == "lfs":
-		job_cmd = f"lfs quota -g {group_name} 2>/dev/null {quota_directory} | grep {quota_directory}"
+		job_cmd = f"lfs quota -g {group_name} 2>/dev/null | grep {quota_directory}"
 	else:
 		job_cmd = f"quota -g {group_name} --show-mntpoint -w 2>/dev/null | grep {quota_directory}"
 	
