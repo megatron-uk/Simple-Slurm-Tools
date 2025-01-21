@@ -463,7 +463,7 @@ def get_group_utilisation_ls(find_type = "ls", group_name = "mygroup", quota_dir
 		print("ERROR (get_group_utilisation_ls): %s" % err)
 		return False
 
-def get_group_utilisation(find_type = "normal", group_name = "mygroup", quota_directory = "/mydir", invert = False, cmd_only = False):
+def get_group_utilisation(find_type = "normal", group_name = "mygroup", quota_directory = "/mydir", invert = False, cmd_only = False, verbose = False):
 	""" Uses 'find' to calculate the space utilisation of an entire directory tree by a given unix group """
 
 	if find_type == "lfs":
@@ -499,6 +499,8 @@ def get_group_utilisation(find_type = "normal", group_name = "mygroup", quota_di
 			if len(output) > 1:
 				found_files_b = output
 				found_files = []
+				if verbose:
+					print(f"Running {job_cmd}...")
 				for f in found_files_b:
 					try:
 						found_files.append(f.decode())
@@ -507,6 +509,8 @@ def get_group_utilisation(find_type = "normal", group_name = "mygroup", quota_di
 						#print(f"Error, {err}")
 						pass
 				# Sum the total capacity used by each file
+				if verbose:
+					print(f"Decoding {len(found_files)}...")
 				for f in found_files:
 					try:
 						file_data = os.stat(f)

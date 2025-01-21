@@ -180,6 +180,9 @@ if __name__ == "__main__":
 
 	if OUT_MODE != "csv":
 		banner()
+		VERBOSE = True
+	else:
+		VERBOSE = False
 		
 	if args.lfs:
 		for prefix in os.environ['PATH'].split(os.pathsep):
@@ -235,7 +238,7 @@ if __name__ == "__main__":
 				
 			# Overall space utilisation by this group
 			if report['method'] == "find":
-				report['group_utilisation'] = get_group_utilisation(FIND_TYPE, GROUP, DIR_NAME)
+				report['group_utilisation'] = get_group_utilisation(FIND_TYPE, GROUP, DIR_NAME, verbose = VERBOSE)
 			elif report['method'] == "ls":
 				report['group_utilisation'] = get_group_utilisation_ls(FIND_TYPE, GROUP, DIR_NAME)
 			else:
@@ -264,7 +267,7 @@ if __name__ == "__main__":
 			if report['method'] == "ls":
 				report['alien_group_utilisation'] = get_group_utilisation_ls(FIND_TYPE, GROUP, DIR_NAME, invert = True)
 			else:
-				report['alien_group_utilisation'] = get_group_utilisation(FIND_TYPE, GROUP, DIR_NAME, invert = True)
+				report['alien_group_utilisation'] = get_group_utilisation(FIND_TYPE, GROUP, DIR_NAME, invert = True, verbose = VERBOSE)
 			if OUT_MODE != "csv":
 				print("- Done")
 				
