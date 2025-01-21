@@ -1,0 +1,15 @@
+#/bin/bash
+
+# Example of a wrapper around the simple_disk_quota 
+# script to batch process many unix group names, as found in
+# 'groupnames.txt' on two different mount points:
+# - /home is a standard unix mount, using 'quota'
+# - /mnt/storage is a Lustre mount, using 'lfs quota'
+
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+
+cat $SCRIPT_DIR/groupnames.txt | while read g
+do
+	$SCRIPT_DIR/simple_disk_quota -d /home -g -G $g
+	$SCRIPT_DIR/simple_disk_quota -d /mnt/storage -l -g -G $g
+done

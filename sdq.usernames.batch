@@ -1,0 +1,16 @@
+#/bin/bash
+
+# Example of a wrapper around the simple_disk_quota 
+# script to batch process many usernames as found in
+# 'usernames.txt' on two different mount points:
+# - /home is a standard unix mount, using 'quota'
+# - /mnt/storage is a Lustre mount, using 'lfs quota'
+
+
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+
+cat $SCRIPT_DIR/usernames.txt | while read u
+do
+	$SCRIPT_DIR/simple_disk_quota -d /home -u -U $u
+	$SCRIPT_DIR/simple_disk_quota -d /mnt/storage -l -u -U $u
+done
