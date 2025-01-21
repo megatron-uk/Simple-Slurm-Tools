@@ -251,8 +251,8 @@ if __name__ == "__main__":
 				print("Please wait, retrieving individual user space utilisation: ")
 			if report['is_group_has_members']:
 				for user in ALL_USERS:
-					if OUT_MODE != "csv":
-						print(".", end="")
+					#if OUT_MODE != "csv":
+					#	print(".", end="")
 					user_data = {
 						'user' : user,
 						'data' : get_user_utilisation(FIND_TYPE, user, DIR_NAME, verbose = VERBOSE) 

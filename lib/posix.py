@@ -570,9 +570,9 @@ def get_user_utilisation(find_type = "normal", user_name = "myuser", quota_direc
 	""" Report user utilisation of a given directory tree using find """
 		
 	if find_type == "lfs":
-		job_cmd = f"lfs find {quota_directory} -user {user_name} 2>/dev/null"
+		job_cmd = f"lfs find {quota_directory} -user {user_name} -printf '%s %p\n' 2>/dev/null"
 	else:
-		job_cmd = f"find {quota_directory} -user {user_name} 2>/dev/null"
+		job_cmd = f"find {quota_directory} -user {user_name} -printf '%s %p\n' 2>/dev/null"
 	
 	if cmd_only:
 		return job_cmd
@@ -595,24 +595,29 @@ def get_user_utilisation(find_type = "normal", user_name = "myuser", quota_direc
 			if len(output) > 1:
 				found_files_b = output
 				found_files = []
+				if verbose:
+					print(f"Decoding {len(found_files)}...")
 				for f in found_files_b:
 					try:
-						found_files.append(f.decode())
+						f_name = f.decode().split(" ")[1]
+						f_size = f.decode().split(" ")[0]
+						found_files.append(f_name)
+						data['quota'] = data['quota'] + f_size
 					except Exception as e:
 						# In case any files have names that we cannot decode
 						#print(f"Error, {e}")
 						pass
 				# Sum the total capacity used by each file
-				if verbose:
-					print(f"Decoding {len(found_files)}...")
-				for f in found_files:
-					try:
-						file_data = os.stat(f)
-						data['quota'] = data['quota'] + file_data.st_size
-					except Exception as err:
-						pass
+				#if verbose:
+				#	print(f"Decoding {len(found_files)}...")
+				#for f in found_files:
+				#	try:
+				#		file_data = os.stat(f)
+				#		data['quota'] = data['quota'] + file_data.st_size
+				#	except Exception as err:
+				#		pass
 					
-				# st_size is in bytes, so store as kbytes
+				# f_size is in bytes, so store as kbytes
 				if data['quota'] > 1024:
 					data['quota'] = int(data['quota'] / 1024)
 				else:
