@@ -107,7 +107,7 @@ def get_user_quota(find_type = "normal", user_name = "myname", quota_directory =
 			if len(output) > 1:
 				fields = output.decode().split()
 				if len(fields) > 5:
-					if FIND_TYPE == "lfs":
+					if find_type == "lfs":
 						# Lustre based filesystem quotas
 						QUOTA_FIELD = 1
 						LIMIT_FIELD = 2
@@ -161,7 +161,7 @@ def get_group_quota(find_type = "normal", group_name = "mygroup", quota_director
 			if len(output) > 1:
 				fields = output.decode().split()
 				if len(fields) > 5:
-					if FIND_TYPE == "lfs":
+					if find_type == "lfs":
 						# Lustre based filesystem quotas
 						QUOTA_FIELD = 1
 						LIMIT_FIELD = 2

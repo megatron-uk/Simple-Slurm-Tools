@@ -208,7 +208,7 @@ if __name__ == "__main__":
 
 			report = {
 				'group'					: GROUP,
-				'method'					: FIND_MODE,
+				'method'				: FIND_MODE,
 				'fs_type'				: FIND_TYPE,
 				'dir_name' 				: DIR_NAME,
 				'is_valid_group' 		: is_valid_group,
@@ -232,10 +232,11 @@ if __name__ == "__main__":
 
 			if OUT_MODE != "csv":
 				print("Please wait, retrieving group space utilisation: ")
+				
 			# Overall space utilisation by this group
 			if report['method'] == "find":
 				report['group_utilisation'] = get_group_utilisation(FIND_TYPE, GROUP, DIR_NAME)
-			if report['method'] == "ls":
+			elif report['method'] == "ls":
 				report['group_utilisation'] = get_group_utilisation_ls(FIND_TYPE, GROUP, DIR_NAME)
 			else:
 				report['group_utilisation'] = get_group_quota(FIND_TYPE, GROUP, DIR_NAME)
