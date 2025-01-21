@@ -469,15 +469,15 @@ def get_group_utilisation(find_type = "normal", group_name = "mygroup", quota_di
 	if find_type == "lfs":
 		if invert:
 			# Find everything NOT owned by the group
-			job_cmd = f"lfs find {quota_directory} -not -group {group_name} 2>/dev/null"
+			job_cmd = f"lfs find {quota_directory} ! -group {group_name} 2>/dev/null | " + "awk '{print $5 \" \" $9}'"
 		else:
-			job_cmd = f"lfs find {quota_directory} -group {group_name} 2>/dev/null"
+			job_cmd = f"lfs find {quota_directory} -group {group_name} 2>/dev/null | " + "awk '{print $5 \" \" $9}'"
 	else:
 		if invert:
 			# Find everything NOT owned by the group
-			job_cmd = f"find {quota_directory} -not -group {group_name} 2>/dev/null"
+			job_cmd = f"find {quota_directory} -not -group {group_name} -printf '%s %p\n' 2>/dev/null"
 		else:
-			job_cmd = f"find {quota_directory} -group {group_name} 2>/dev/null"
+			job_cmd = f"find {quota_directory} -group {group_name} -printf '%s %p\n' 2>/dev/null"
 	
 	if cmd_only:
 		return job_cmd
@@ -491,8 +491,6 @@ def get_group_utilisation(find_type = "normal", group_name = "mygroup", quota_di
 	}
 	
 	try:
-		if verbose:
-			print(f"Running {job_cmd}...")
 		process = subprocess.Popen(job_cmd, shell=True,
 					stdin=subprocess.PIPE, stdout=subprocess.PIPE,
 					stderr=subprocess.STDOUT)
@@ -501,23 +499,20 @@ def get_group_utilisation(find_type = "normal", group_name = "mygroup", quota_di
 			if len(output) > 1:
 				found_files_b = output
 				found_files = []
-				
+			
 				for f in found_files_b:
 					try:
+						f = f.decode()
+						f_split = f.split(" ")
+						f_name = f_split[1]
+						f_size = f_split[0]
+						if len(f_size) > 0:
+							f_size = int(f_size)
+							data['quota'] = data['quota'] + f_size
 						found_files.append(f.decode())
 					except Exception as err:
 						# In case any files have names that we cannot decode
 						#print(f"Error, {err}")
-						pass
-				# Sum the total capacity used by each file
-				if verbose:
-					print(f"Decoding {len(found_files)}...")
-				for f in found_files:
-					try:
-						file_data = os.stat(f)
-						data['files'].append(f)
-						data['quota'] = data['quota'] + file_data.st_size
-					except:
 						pass
 					
 				# st_size is in bytes, so store as kbytes
@@ -570,7 +565,7 @@ def get_user_utilisation(find_type = "normal", user_name = "myuser", quota_direc
 	""" Report user utilisation of a given directory tree using find """
 		
 	if find_type == "lfs":
-		job_cmd = f"lfs find {quota_directory} -user {user_name} -printf '%s %p\n' 2>/dev/null"
+		job_cmd = f"lfs find {quota_directory} -user {user_name} -print 2>/dev/null | xargs -r ls -l | " + "awk '{print $5 \" \" $9}'"
 	else:
 		job_cmd = f"find {quota_directory} -user {user_name} -printf '%s %p\n' 2>/dev/null"
 	
@@ -585,8 +580,7 @@ def get_user_utilisation(find_type = "normal", user_name = "myuser", quota_direc
 	}
 	
 	try:
-		if verbose:
-			print(f"Running {job_cmd}...")
+		print(f"Running {job_cmd}")
 		process = subprocess.Popen(job_cmd, shell=True,
 					stdin=subprocess.PIPE, stdout=subprocess.PIPE,
 					stderr=subprocess.STDOUT)
@@ -594,35 +588,25 @@ def get_user_utilisation(find_type = "normal", user_name = "myuser", quota_direc
 			output = process.stdout.read().rstrip().split(b'\n')
 			if len(output) > 1:
 				found_files_b = output
-				found_files = []
-				if verbose:
-					print(f"Decoding {len(found_files)}...")
 				for f in found_files_b:
 					try:
-						f_name = f.decode().split(" ")[1]
-						f_size = f.decode().split(" ")[0]
-						found_files.append(f_name)
-						data['quota'] = data['quota'] + f_size
+						f = f.decode()
+						f_split = f.split(" ")
+						f_name = f_split[1]
+						f_size = f_split[0]
+						if len(f_size) > 0:
+							data['quota'] = data['quota'] + int(f_size)
 					except Exception as e:
 						# In case any files have names that we cannot decode
-						#print(f"Error, {e}")
+						print(f"Error, {e}")
 						pass
-				# Sum the total capacity used by each file
-				#if verbose:
-				#	print(f"Decoding {len(found_files)}...")
-				#for f in found_files:
-				#	try:
-				#		file_data = os.stat(f)
-				#		data['quota'] = data['quota'] + file_data.st_size
-				#	except Exception as err:
-				#		pass
 					
 				# f_size is in bytes, so store as kbytes
 				if data['quota'] > 1024:
 					data['quota'] = int(data['quota'] / 1024)
 				else:
 					data['quota'] = 0
-							
+	
 		return(data)
 
 	except Exception as err:
@@ -682,7 +666,7 @@ def get_user_orphaned_files(find_type = "normal", username_list = None, quota_di
 	if find_type == "generic":
 		if len(username_list) == 1:
 			# group with more than one name
-			job_cmd = f"find {quota_directory} -not -user {username_list[0]} 2>/dev/null"
+			job_cmd = f"find {quota_directory} -not -user {username_list[0]} 2>/dev/null | xargs -r ls -l |" + " awk '{print $5 \" \" $9}'"
 		else:
 			# group with one name
 			job_cmd = f"find {quota_directory} "
@@ -690,20 +674,20 @@ def get_user_orphaned_files(find_type = "normal", username_list = None, quota_di
 				job_cmd = job_cmd + "-not -user " + u + " -a "
 				
 			# trim trailing "-a "
-			job_cmd = job_cmd[:-3] + " 2>/dev/null"
+			job_cmd = job_cmd[:-3] + " -print '%s %p\n' 2>/dev/null"
 			
 	if find_type == "lfs":
 		if len(username_list) == 1:
 			# group with more than one name
-			job_cmd = f"lfs find {quota_directory} -not -user {username_list[0]} 2>/dev/null"
+			job_cmd = f"lfs find {quota_directory} ! -user {username_list[0]} -print 2>/dev/null"
 		else:
 			# group with one name
 			job_cmd = f"find {quota_directory} "
 			for u in username_list:
-				job_cmd = job_cmd + "-not -user " + u + " -a "
+				job_cmd = job_cmd + "! -user " + u + " -a "
 				
 			# trim trailing "-a "
-			job_cmd = job_cmd[:-3] + " 2>/dev/null"
+			job_cmd = job_cmd[:-3] + " -print 2>/dev/null | xargs -r ls -l | awk '{print $5 \" \" $9}'"
 	
 	if cmd_only:
 		return job_cmd
