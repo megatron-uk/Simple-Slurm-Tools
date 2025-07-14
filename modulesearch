@@ -13,11 +13,11 @@
 AUTHOR="John Snowdon"
 URL="https://github.com/megatron-uk/Simple-Slurm-Tools"
 
-SEARCHMODULE=$1
+modcount=0
+EXACT="0"
+SEARCHMODULE=""
 SEARCHOUT=modulesearch.out
 SEARCHCACHE=$HOME/.modulesearch
-modcount=`module -t avail 2>&1 | grep -v :$ | grep -v /$ | wc -l`
-> $SEARCHOUT
 
 banner() {
 	echo "modulesearch - A loadable module dependency tool"
@@ -31,10 +31,14 @@ banner() {
 
 useage() {
 	echo ""
-	echo "USE:"
-	echo "modulesearch MODULENAME/VERSION"
+	echo "-?			Show this help text"
+	echo "-h			Show this help text"
+	echo "-e			Use exact matching; e.g. X11/v1.2.3"
+	echo "-m [MODULE_NAME]	Find this module"
 	echo ""
-	exit 0
+	echo "Example:"
+	echo "modulesearch -m MODULENAME/VERSION"
+	echo ""
 }
 
 initcache() {
@@ -45,6 +49,7 @@ initcache() {
 		echo "Unable to initialise modulesearch cache directory [$SEARCHCACHE]"
 		exit 1
 	fi
+	>$SEARCHOUT
 }
 
 has_module_or_exit() {
@@ -55,30 +60,62 @@ has_module_or_exit() {
 		echo "Unable to find module command"
 		echo "You need the Linux environment module system installed and working."
 		exit 1
+	else
+		modcount=`module -t avail 2>&1 | grep -v :$ | wc -l`
 	fi
 }
 
+###############################################
+# Process arguments
+while getopts hem: opt
+do
+    case "$opt" in
+    h)
+        banner
+        useage
+        exit 0
+        ;;
+    e)
+        EXACT="1"
+        ;;
+    m)
+        echo "got searchmodule"
+        SEARCHMODULE=$OPTARG
+        ;;
+  esac
+done
+shift $(( OPTIND - 1 ))
+
+#############################################
+# Sanity checks
 has_module_or_exit
-
 initcache
-
-if [ "$1" == "" ]
+if [ "$SEARCHMODULE" == "" ]
 then
 	banner
 	useage
+	echo "You did not supply the '-m MODULENAME' option"
 	exit 0
 fi
 
+###########################################
+# Start search
 C=0
 echo "modulesearch"
 echo "============"
 echo "A tool for finding parents of dependent modules."
 echo ""
 echo "Searching for modules which have the dependency [$SEARCHMODULE]"
+if [ "$EXACT" == "1" ]
+then
+	echo "Searching using EXACT matches"
+else
+	echo "Searching using PARTIAL matches"
+fi
 echo "Search results will be held in [$SEARCHOUT]"
 echo "Searching through [$modcount] modules, please wait:"
 echo ""
-module -t avail 2>&1 | grep -v :$ | grep -v /$ | sort | uniq | while read modname
+module -t avail 2>&1 | grep -v :$ | sort | uniq | while read modname
 do
 	# Hash the module name and version
 	md5name=`echo $modname | md5sum | awk '{print $1}'`
@@ -94,16 +131,28 @@ do
 		module show $modname 2>&1 | grep -e "depends_on(" -e "load(" > $SEARCHCACHE/$md5name
 	fi
 	# Search the cache file
-	grep "($SEARCHMODULE)" $SEARCHCACHE/$md5name 2>/dev/null >/dev/null
-	if [ "$?" == "0" ]
+
+	if [ "$EXACT" == "1" ]
 	then
-		echo "$modname" >> modulesearch.out
+		# Exact match
+		grep "(\"$SEARCHMODULE\")" $SEARCHCACHE/$md5name 2>/dev/null >/dev/null
+		if [ "$?" == "0" ]
+        then
+            echo "$modname" >> modulesearch.out
+        fi
+	else
+		# Partial match
+		grep "(\"$SEARCHMODULE" $SEARCHCACHE/$md5name 2>/dev/null >/dev/null
+		if [ "$?" == "0" ]
+		then
+			echo "$modname" >> modulesearch.out
+		fi
 	fi
 	let C=($C + 1)
 done
 echo -ne "Searched all packages                                         \r"
 echo ""
 echo "Found [`wc -l $SEARCHOUT | awk '{print $1}'`] results"
-echo "Please run 'cat $SEARCHOUT' to see found packages"
+echo "Please 'cat $SEARCHOUT' to see found packages"
 echo ""
 exit 0
