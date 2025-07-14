@@ -1,0 +1,109 @@
+#!/bin/bash
+
+###################################################################
+#
+# Search for a given loadable module in all the available modules.
+# This finds any parent modules which directly depend on, or require
+# the given module to be loaded.
+#
+# This checks for depends_on() or load() entries to find matches.
+#
+####################################################################
+
+AUTHOR="John Snowdon"
+URL="https://github.com/megatron-uk/Simple-Slurm-Tools"
+
+SEARCHMODULE=$1
+SEARCHOUT=modulesearch.out
+SEARCHCACHE=$HOME/.modulesearch
+modcount=`module -t avail 2>&1 | grep -v :$ | grep -v /$ | wc -l`
+> $SEARCHOUT
+
+banner() {
+	echo "modulesearch - A loadable module dependency tool"
+	echo "================================================"
+	echo ""
+	echo "Part of Simple Slurm Tools"
+	echo "Author: $AUTHOR"
+	echo "URL: $URL"
+	echo "" 
+}
+
+useage() {
+	echo ""
+	echo "USE:"
+	echo "modulesearch MODULENAME/VERSION"
+	echo ""
+	exit 0
+}
+
+initcache() {
+	mkdir -p $SEARCHCACHE
+	if [ "$?" != "0" ]
+	then
+		echo "ERROR!"
+		echo "Unable to initialise modulesearch cache directory [$SEARCHCACHE]"
+		exit 1
+	fi
+}
+
+has_module_or_exit() {
+	which module >/dev/null 2>/dev/null
+	if [ "$?" != "0" ]
+	then
+		echo "ERROR!"
+		echo "Unable to find module command"
+		echo "You need the Linux environment module system installed and working."
+		exit 1
+	fi
+}
+
+has_module_or_exit
+
+initcache
+
+if [ "$1" == "" ]
+then
+	banner
+	useage
+	exit 0
+fi
+
+C=0
+echo "modulesearch"
+echo "============"
+echo "A tool for finding parents of dependent modules."
+echo ""
+echo "Searching for modules which have the dependency [$SEARCHMODULE]"
+echo "Search results will be held in [$SEARCHOUT]"
+echo "Searching through [$modcount] modules, please wait:"
+echo ""
+module -t avail 2>&1 | grep -v :$ | grep -v /$ | sort | uniq | while read modname
+do
+	# Hash the module name and version
+	md5name=`echo $modname | md5sum | awk '{print $1}'`
+	# Search for an existing cache entry
+	if [ -e $SEARCHCACHE/$md5name ]
+	then
+		# Cache hit
+		echo -ne "Searching [$C] $modname ... (C)                                \r"
+	else
+		# Cache miss
+		echo -ne "Searching [$C] $modname ...                                    \r"
+		# Store result in cache
+		module show $modname 2>&1 | grep -e "depends_on(" -e "load(" > $SEARCHCACHE/$md5name
+	fi
+	# Search the cache file
+	grep "($SEARCHMODULE)" $SEARCHCACHE/$md5name 2>/dev/null >/dev/null
+	if [ "$?" == "0" ]
+	then
+		echo "$modname" >> modulesearch.out
+	fi
+	let C=($C + 1)
+done
+echo -ne "Searched all packages                                         \r"
+echo ""
+echo "Found [`wc -l $SEARCHOUT | awk '{print $1}'`] results"
+echo "Please run 'cat $SEARCHOUT' to see found packages"
+echo ""
+exit 0

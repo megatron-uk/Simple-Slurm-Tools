@@ -491,6 +491,8 @@ def get_group_utilisation(find_type = "normal", group_name = "mygroup", quota_di
 	}
 	
 	try:
+		if verbose:
+			print(f"Running {job_cmd}")
 		process = subprocess.Popen(job_cmd, shell=True,
 					stdin=subprocess.PIPE, stdout=subprocess.PIPE,
 					stderr=subprocess.STDOUT)
@@ -527,7 +529,7 @@ def get_group_utilisation(find_type = "normal", group_name = "mygroup", quota_di
 		print("ERROR (get_group_utilisation): %s" % err)
 		return False
 		
-def get_user_utilisation_ls(find_type = "normal", user_name = "myuser", quota_directory = "/mydir", cmd_only = False):
+def get_user_utilisation_ls(find_type = "normal", user_name = "myuser", quota_directory = "/mydir", cmd_only = False, verbose = False):
 	""" Report user utilisation of a given directory tree, using ls -lR """
 	
 	job_cmd = f"ls -alskLR {quota_directory} 2>/dev/null"
@@ -544,6 +546,8 @@ def get_user_utilisation_ls(find_type = "normal", user_name = "myuser", quota_di
 	}
 	
 	try:
+		if verbose:
+			print(f"Running {job_cmd}")
 		process = subprocess.Popen(job_cmd, shell=True,
 					stdin=subprocess.PIPE, stdout=subprocess.PIPE,
 					stderr=subprocess.STDOUT)
@@ -580,7 +584,8 @@ def get_user_utilisation(find_type = "normal", user_name = "myuser", quota_direc
 	}
 	
 	try:
-		print(f"Running {job_cmd}")
+		if verbose:
+			print(f"Running {job_cmd}")
 		process = subprocess.Popen(job_cmd, shell=True,
 					stdin=subprocess.PIPE, stdout=subprocess.PIPE,
 					stderr=subprocess.STDOUT)
@@ -613,7 +618,7 @@ def get_user_utilisation(find_type = "normal", user_name = "myuser", quota_direc
 		print("ERROR (get_user_utilisation): %s" % err)
 		return False
 		
-def get_user_orphaned_files_ls(find_type = "normal", username_list = None, quota_directory = "/mydir", cmd_only = False):
+def get_user_orphaned_files_ls(find_type = "normal", username_list = None, quota_directory = "/mydir", cmd_only = False, verbose = False):
 	""" Get a list of files which are owned by users other than those in the provided username_list. """
 	
 	job_cmd = f"ls -alskLR {quota_directory} 2>/dev/null"
@@ -628,6 +633,8 @@ def get_user_orphaned_files_ls(find_type = "normal", username_list = None, quota
 	}
 	
 	try:
+		if verbose:
+			print(f"Running {job_cmd}")
 		process = subprocess.Popen(job_cmd, shell=True,
 					stdin=subprocess.PIPE, stdout=subprocess.PIPE,
 					stderr=subprocess.STDOUT)
@@ -660,7 +667,7 @@ def get_user_orphaned_files_ls(find_type = "normal", username_list = None, quota
 		return False
 			
 		
-def get_user_orphaned_files(find_type = "normal", username_list = None, quota_directory = "/mydir", cmd_only = False):
+def get_user_orphaned_files(find_type = "normal", username_list = None, quota_directory = "/mydir", cmd_only = False, verbose = False):
 	""" Get a list of files which are owned by users other than those in the provided username_list. """
 	
 	if find_type == "generic":
@@ -699,6 +706,8 @@ def get_user_orphaned_files(find_type = "normal", username_list = None, quota_di
 	}
 	
 	try:
+		if verbose:
+			print(f"Running {job_cmd}")
 		process = subprocess.Popen(job_cmd, shell=True,
 					stdin=subprocess.PIPE, stdout=subprocess.PIPE,
 					stderr=subprocess.STDOUT)

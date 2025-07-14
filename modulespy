@@ -46,14 +46,19 @@ def parse_module(module_name = "", module_text = ""):
 		return cacheresults[module_name]
 
 	found_modules = []
-
-	match_prog = re.compile(r'^load\(.+')
+	match_prog = re.compile(r'^depends_on\(.+')
+	match_prog2 = re.compile(r'^load\(.+')
 	for line in module_text:
 		if len(line) > 4:
 			l_string = line.decode()
 			results = match_prog.match(l_string)
 			if results:
 				new_module = results.group(0).split('"')[1]
+				print(f"{module_name} -> {new_module}")
+				found_modules.append(new_module)
+			results = match_prog2.match(l_string)
+			if results:
+				new_modules = results.group(0).split('"')[1]
 				print(f"{module_name} -> {new_module}")
 				found_modules.append(new_module)
 
@@ -68,7 +73,7 @@ def parse_module(module_name = "", module_text = ""):
 def run_module(module_name = ""):
 	""" Run a subprocess to call the module function. """
 
-	jobcmd = f"module show {module_name}"
+	jobcmd = "module show " + module_name
 
 	if module_name in cache:
 		return cache[module_name]
