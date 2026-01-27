@@ -37,6 +37,7 @@ class slurmCache():
 	def __init__(self):
 		self.master_key = None
 		self.debug = settings.DEBUG
+		self.enabled = False
 
 	def hashcode(self):
 		""" Hash all of the source files which will be used to
@@ -73,6 +74,9 @@ class slurmCache():
 	def store(self, year = 0, month = 0, day = 0, hours = 0, minutes = 0, key = "", data = None):
 		""" Store a persistent data object on disk """
 		
+		if self.enabled is False:
+			return False
+
 		if data:
 				
 			k = self.hashkey(year, month, day, hours, minutes, key)
@@ -94,6 +98,9 @@ class slurmCache():
 	def load(self, year = 0, month = 0, day = 0, hours = 0, minutes = 0, key = ""):
 		""" Load a persistent cache object from disk """
 
+		if self.enabled is False:
+			return False
+
 		k = self.hashkey(year, month, day, hours, minutes, key)
 			
 		cache_filename = settings.CACHE_PATH + "/" + k + ".json"
@@ -111,7 +118,10 @@ class slurmCache():
 		
 	def storecmd(self, key = "", data = None):
 		""" Store a persistent data object on disk """
-		
+	
+		if self.enabled is False:
+			return True
+
 		if data:
 				
 			k = self.hashkey(key)
@@ -132,6 +142,9 @@ class slurmCache():
 		
 	def loadcmd(self, key = ""):
 		""" Load a persistent cache object from disk """
+
+		if self.enabled is False:
+			return False
 
 		k = self.hashkey(key)
 			

@@ -132,7 +132,10 @@ def queue_summary(qjobs = None, qpending_jobs = None, out_mode = OUT_MODE):
 
 			# Update totals for cores, ram and runtime
 			stats[jobtype]['time']['sum'] = stats[jobtype]['time']['sum'] + j[timefield]
-			stats[jobtype]['cores']['sum'] = stats[jobtype]['cores']['sum'] + j['AllocCPUS']
+			if jobtype == "PD":
+				stats[jobtype]['cores']['sum'] = stats[jobtype]['cores']['sum'] + j['ReqCPUS']
+			else:
+				stats[jobtype]['cores']['sum'] = stats[jobtype]['cores']['sum'] + j['AllocCPUS']
 			stats[jobtype]['ramjob']['sum'] = stats[jobtype]['ramjob']['sum'] + j['TotalMemory']
 			stats[jobtype]['ramcore']['sum'] = stats[jobtype]['ramcore']['sum'] + j['MemoryPerCore']
 
@@ -141,8 +144,12 @@ def queue_summary(qjobs = None, qpending_jobs = None, out_mode = OUT_MODE):
 				stats[jobtype]['time']['max'] = j[timefield]
 
 			# Update max core count
-			if j['AllocCPUS'] > stats[jobtype]['cores']['max']:
-				stats[jobtype]['cores']['max'] = j['AllocCPUS']
+			if jobtype == "PD":
+				if j['ReqCPUS'] > stats[jobtype]['cores']['max']:
+					stats[jobtype]['cores']['max'] = j['ReqCPUS']
+			else:
+				if j['AllocCPUS'] > stats[jobtype]['cores']['max']:
+					stats[jobtype]['cores']['max'] = j['AllocCPUS']
 
 			# Update max ram/job count
 			if j['TotalMemory'] > stats[jobtype]['ramjob']['max']:

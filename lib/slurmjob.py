@@ -34,7 +34,7 @@ AUTHOR = "John Snowdon"
 URL= "https://github.com/megatron-uk/Simple-Slurm-Tools"
 
 # Fields retrieved when getting lists of jobs
-FIELDS_SUMMARY 	= 'User,Account,AllocCPUS,AllocNodes,CPUTimeRaw,Elapsed,JobID,Reserved,\
+FIELDS_SUMMARY 	= 'User,Account,AllocCPUS,AllocNodes,CPUTimeRaw,Elapsed,JobID,\
 NodeList,Partition,Reason,ReqCPUS,ReqMem,ReqNodes,Submit'
 FIELDS_INTEGER 	= ['AllocCPUS', 'AllocNodes', 'ReqCPUS', 'CPUTimeRaw', 'ReqNodes']
 FIELDS_LIST 		= []
@@ -47,7 +47,7 @@ MaxDiskWriteNode,MaxDiskWriteTask,MaxPages,MaxPagesNode,MaxPagesTask,MaxRSS,MaxR
 MaxRSSTask,MaxVMSize,MaxVMSizeNode,MaxVMSizeTask,McsLabel,MinCPU,MinCPUNode,MinCPUTask,\
 NCPUS,NNodes,NodeList,NTasks,Priority,Partition,QOS,QOSRAW,Reason,ReqCPUFreq,\
 ReqCPUFreqMin,ReqCPUFreqMax,ReqCPUFreqGov,ReqCPUS,ReqMem,ReqNodes,ReqTRES,Reservation,\
-ReservationId,Reserved,ResvCPU,ResvCPURAW,Start,State,Submit,Suspended,SystemCPU,\
+ReservationId,ResvCPU,ResvCPURAW,Start,State,Submit,Suspended,SystemCPU,\
 SystemComment,Timelimit,TimelimitRaw,TotalCPU,TRESUsageInAve,TRESUsageInMax,\
 TRESUsageInMaxNode,TRESUsageInMaxTask,TRESUsageInMin,TRESUsageInMinNode,\
 TRESUsageInMinTask,TRESUsageInTot,TRESUsageOutAve,TRESUsageOutMax,TRESUsageOutMaxNode,\
@@ -134,8 +134,7 @@ class SlurmJob():
 			if 'T' in reqmem:
 				data = int(float(reqmem.split('T')[0])) * 1024 * 1024
 			return data
-
-		if 'n' in reqmem:
+		elif 'n' in reqmem:
 			if allocnodes != 0:
 				nodes = allocnodes
 			else:
@@ -149,7 +148,20 @@ class SlurmJob():
 
 			if 'T' in reqmem:
 				data = (int(float(reqmem.split('T')[0])) * 1024 * 1024) / (cpus / nodes)
+		else:
+			if allocnodes != 0:
+				nodes = allocnodes
+			else:
+				nodes = reqnodes
 
+			if 'M' in reqmem:
+				data = int(float(reqmem.split('M')[0])) / (cpus / nodes)
+
+			if 'G' in reqmem:
+				data = (int(float(reqmem.split('G')[0])) * 1024) / (cpus / nodes)
+
+			if 'T' in reqmem:
+				data = (int(float(reqmem.split('T')[0])) * 1024 * 1024) / (cpus / nodes)
 		return data
 
 	def set_rowsummary(self, stdout = None, expand_nodes = False):
@@ -192,7 +204,7 @@ class SlurmJob():
 			if expand_nodes:
 				data['NodeList'] = self.expand_nodelist(nodelist = data['NodeList'])
 
-			data['ReservedTime'] = self.field_to_datetime(field = data['Reserved']).total_seconds() / 60
+			#data['ReservedTime'] = self.field_to_datetime(field = data['Reserved']).total_seconds() / 60
 			data['ElapsedTime'] = self.field_to_datetime(field = data['Elapsed']).total_seconds() / 60
 
 			# Also generate a 'minutes prior to now' field based on the submission date/time field
@@ -257,7 +269,7 @@ class SlurmJob():
 		# D-HH:MM:SS
 		# This needs to be transformed into an object we can tally with others
 		if row == 0:
-			data['ReservedTime'] = self.field_to_datetime(field = data['Reserved']).total_seconds() / 60
+			#data['ReservedTime'] = self.field_to_datetime(field = data['Reserved']).total_seconds() / 60
 			data['ElapsedTime'] = self.field_to_datetime(field = data['Elapsed']).total_seconds() / 60
 
 		if row == 0:
@@ -281,7 +293,7 @@ class SlurmJob():
 			if res:
 				return res
 				
-			# No - run the cmd			
+			# No - run the cmd		
 			process = subprocess.Popen(job_cmd, shell=True,
 				stdin=subprocess.PIPE, stdout=subprocess.PIPE,
 				stderr=subprocess.STDOUT)
