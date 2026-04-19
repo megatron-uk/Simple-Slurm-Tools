@@ -1,0 +1,293 @@
+#!/usr/bin/env python3
+
+"""
+Simple Slurm Tools
+Copyright (C) 2024 John Snowdon
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+"""
+
+import argparse
+import os 
+import sys
+from lib.slurmjob import SlurmJob
+from lib.slurmlimits import SlurmLimits
+
+####################################################################
+#
+# Show a summary of jobs for a given Slurm project account and *why*
+# the jobs are in their specific states.
+#
+####################################################################
+
+AUTHOR	= "John Snowdon"
+URL		= "https://github.com/megatron-uk/Simple-Slurm-Tools"
+
+def isxterm():
+	if os.environ['TERM'] in ['xterm-256color']:
+		return True
+	else:
+		return False
+
+class colour:
+	def __init__(self):
+		if isxterm():
+			self.PURPLE = '\033[95m'
+			self.CYAN = '\033[96m'
+			self.DARKCYAN = '\033[36m'
+			self.BLUE = '\033[94m'
+			self.GREEN = '\033[92m'
+			self.YELLOW = '\033[93m'
+			self.RED = '\033[91m'
+			self.BOLD = '\033[1m'
+			self.UNDERLINE = '\033[4m'
+			self.END = '\033[0m'
+		else:
+			self.PURPLE = ''
+			self.CYAN = ''
+			self.DARKCYAN = ''
+			self.BLUE = ''
+			self.GREEN = ''
+			self.YELLOW = ''
+			self.RED = ''
+			self.BOLD = ''
+			self.UNDERLINE = ''
+			self.END = ''
+
+c = colour()
+
+def banner():
+	print(c.BOLD + "Slurm Project Account Summary" + c.END)
+	print("=============================")
+	print("")
+	print("Part of Simple Slurm Tools")
+	print(f"Author: {AUTHOR}")
+	print(f"URL: {URL}")
+	print("")
+
+def help():
+	pass
+
+def showAccountSummary(slurmlimits = None):
+
+	limits = sl.getAccountLimits()
+	freeparts = sl.getAccountFreePartitions()
+	paidparts = sl.getAccountPaidPartitions()
+
+	print(c.UNDERLINE + "Slurm Account Summary" + c.END)
+	print(f"Account Code: {sl.account_code}")
+	print("")
+	print(c.UNDERLINE + "Partitions" + c.END)
+	if len(freeparts) > 0:
+		print(c.GREEN + f"FREE: {freeparts}" + c.END)
+	else:
+		print(c.RED + "Warning: This account does not have access to FREE partitions" + c.END)
+	if len(paidparts) > 0:
+		print(c.GREEN + f"PAID: {paidparts}" + c.END)
+	else:
+		print(c.RED + "Warning: This account does not have access to PAID partitions" + c.END)
+
+	print("")
+	print(c.UNDERLINE + "Resource Limits" + c.END)
+
+	if len(limits.keys()) == 0:
+		print(c.RED + "Warning: There are no resource limits found in Slurm for this account_code" + c.END)
+	else:
+		if "MaxJobs" in limits:
+			print(f"- MaxJobs:	{limits['MaxJobs']}	- Maximum number of running jobs *per user* for this account_code")
+		else:
+			print("- MaxJobs:	Undefined - Maximum number of running jobs *per user* for this account_code")
+
+		if "MaxSubmit" in limits:
+			print(f"- MaxSubmit:	{limits['MaxSubmit']}	- Maximum number of jobs this account_code can have pending")
+		else:
+			print("- MaxSubmit:	Undefined - Maximum number of jobs this account_code can have pending")
+
+		if "GrpWall" in limits:
+			print(f"- GrpWall:	{limits['GrpWall']}	- Maximum aggregate runtime by all jobs under this account_code")
+		else:
+			print("- GrpWall:	Undefined - Maximum aggregate runtime by all jobs under this account_code")
+
+		if "GrpJobs" in limits:
+			print(f"- GrpJobs:	{limits['GrpJobs']}	- Maximum number of aggregate running jobs under this account_code")
+		else:
+			print("- GrpJobs:	Undefined - Maximum number of aggregate running jobs under this account_code")
+
+		if "cores" in limits:
+			print(f"- Cores:	{limits['cores']}	- Maximum number of CPU cores which can be used simultaneously by this account code")
+		else:
+			print("- Cores:		Undefined - Maximum number of CPU cores which can be used simultaneously by this account code")
+
+		if "gpu" in limits:
+			print(f"- GPU:		{limits['gpu']}	- Maximum number of GPU cards which can be used simultaneously by this account code")
+		else:
+			print("- GPU:		Undefined - Maximum number of GPU cards which can be used simultaneously by this account code")
+
+		if "ram" in limits:
+			print(f"- RAM:		{limits['ram']} - Maximum amount of RAM (in MBytes) which can be used simultaneously by this account code")
+		else:
+			print(f"- RAM:		Undefined - Maximum amount of RAM (in MBytes) which can be used simultaneously by this account code")
+
+def showJobSummary(slurmlimits = None, slurmjobs = None):
+	print("")
+	print(c.UNDERLINE + "Slurm Job Summary" + c.END)
+
+	jobs_running = 0
+	jobs_pending = 0
+	jobs_total = 0
+
+	cores_running = 0
+	cores_pending = 0
+	cores_total = 0
+
+	gpu_running = 0
+	gpu_pending = 0
+	gpu_total = 0
+
+	ram_running = 0
+	ram_pending = 0
+	ram_total = 0
+
+	if len(slurmjobs) == 0:
+		print(f"There are no jobs running for this account_code")
+		return
+
+	# Work out job statistics
+	for j in slurmjobs:
+		jobs_total += 1
+
+		if j['State'] == "PENDING":
+			jobs_pending += 1
+			cores_pending += j['ReqCPUS']
+			cores_total += j['ReqCPUS']
+			ram_pending += int(j['TotalMemory'])
+			ram_total += int(j['TotalMemory'])
+
+		if j['State'] == "RUNNING":
+			jobs_running += 1
+			cores_running += j['AllocCPUS']
+			cores_total += j['AllocCPUS']
+			ram_running += int(j['TotalMemory'])
+			ram_total += int(j['TotalMemory'])
+
+	# Conditional formatting for Job numbers
+	jobs_running_s = jobs_running
+	jobs_pending_s = jobs_pending
+	jobs_total_s = jobs_total
+	if 'MaxSubmit' in limits.keys():
+		if jobs_pending >= limits['MaxSubmit']:
+			jobs_pending_s = c.RED + f"{jobs_pending:13d}" + c.END
+		else:
+			jobs_pending_s = c.GREEN + f"{jobs_pending:13d}" + c.END
+
+	jobs_running_s = c.GREEN + f"{jobs_running:13d}" + c.END
+	jobs_total_s = c.GREEN + f"{jobs_total:13d}" + c.END
+
+	# Conditional formatting for CPU core stats
+	cores_running_s = cores_running
+	cores_pending_s = cores_pending
+	cores_total_s = cores_total
+	if 'cores' in limits.keys():
+		if cores_running >= limits['cores']:
+			cores_running_s = c.RED + f"{cores_running:13d}" + c.END
+		else:
+			cores_running_s = c.GREEN + f"{cores_running:13d}" + c.END
+		if cores_pending >= limits['cores']:
+			cores_pending_s = c.RED + f"{cores_pending:13d}" + c.END
+		else:
+			cores_pending_s = c.GREEN + f"{cores_pending:13d}" + c.END
+		if (cores_total) >= limits['cores']:
+			cores_total_s = c.RED + f"{cores_total:13d}" + c.END
+		else:
+			cores_total_s = c.GREEN + f"{cores_total:13d}" + c.END
+
+	# Conditional formatting for GPU card stats
+	gpu_running_s = gpu_running
+	gpu_pending_s = gpu_pending
+	gpu_total_s = gpu_total
+	if 'gpu' in limits.keys():
+		if gpu_running >= limits['gpu']:
+			gpu_running_s = c.RED + f"{gpu_running:13d}" + c.END
+		else:
+			gpu_running_s = c.GREEN + f"{gpu_running:13d}" + c.END
+		if gpu_pending >= limits['gpu']:
+			gpu_pending_s = c.RED + f"{gpu_pending:13d}" + c.END
+		else:
+			gpu_pending_s = c.GREEN + f"{gpu_pending:13d}" + c.END
+		if gpu_total >= limits['gpu']:
+			gpu_total_s = c.RED + f"{gpu_total:13d}" + c.END
+		else:
+			gpu_total_s = c.GREEN + f"{gpu_total:13d}" + c.END
+
+	print(c.UNDERLINE + "Metric" + c.END + "       " + c.UNDERLINE + "Running" + c.END + "       " + c.UNDERLINE + "Pending" + c.END + "         " + c.UNDERLINE + "Total"+ c.END)
+	print(f"Jobs   {jobs_running_s} {jobs_pending_s} {jobs_total_s}")
+	print(f"Cores  {cores_running_s} {cores_pending_s} {cores_total_s}")
+	print(f"GPU    {gpu_running_s} {gpu_pending_s} {gpu_total_s}")
+	print(f"RAM    {ram_running:13d} {ram_pending:13d} {ram_total:13d}")
+
+def showPendingSummary(slurmjobs):
+
+	pending_reasons = {}
+
+	sj = SlurmJob()
+
+	for j in slurmjobs:
+		if j['State'] == "PENDING":
+			reason = sj.get_reason(j['JobID'])
+			if reason:
+				if reason not in pending_reasons.keys():
+					pending_reasons[reason] = {
+						'jobs' : 1,
+					}
+				else:
+					pending_reasons[reason]['jobs'] += 1
+
+	if len(pending_reasons.keys()) > 0:
+		print("")
+		print(c.UNDERLINE + "Pending Job Reasons" + c.END)
+		for reason in pending_reasons.keys():
+			d = pending_reasons[reason]
+			print(c.RED + f"{d['jobs']}" + c.END + " jobs pending due to [" + c.RED + f"{reason}" + c.END + "]")
+
+if __name__ == "__main__":
+
+	parser = argparse.ArgumentParser("sproject")
+	parser.add_argument("account", help="The name of a Slurm project account code to use (e.g comet_abczef).", type=str)
+	args = parser.parse_args()
+
+	if args.account:
+		# Get squeue output for account code
+
+		# Get all data...
+		sl = SlurmLimits(account_code = args.account)
+		limits = sl.getAccountLimits()
+		parts = sl.getAccountPartitions()
+		f_parts = sl.getAccountFreePartitions()
+		p_parts = sl.getAccountPaidPartitions()
+
+		sj = SlurmJob()
+		jobs = sj.get_byaccountcode(account_code = args.account)
+
+		# For each job check state
+		showAccountSummary(sl)
+
+		showJobSummary(limits, jobs)
+
+		showPendingSummary(jobs)
+
+		sys.exit(0)
+	else:
+		banner()
+		help()
+		sys.exit(0)

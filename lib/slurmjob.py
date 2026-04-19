@@ -34,8 +34,8 @@ AUTHOR = "John Snowdon"
 URL= "https://github.com/megatron-uk/Simple-Slurm-Tools"
 
 # Fields retrieved when getting lists of jobs
-FIELDS_SUMMARY 	= 'User,Account,AllocCPUS,AllocNodes,CPUTimeRaw,Elapsed,JobID,\
-NodeList,Partition,Reason,ReqCPUS,ReqMem,ReqNodes,Submit'
+FIELDS_SUMMARY 	= 'User,Account,AllocCPUS,AllocNodes,AllocTRES,CPUTimeRaw,Elapsed,JobID,\
+NodeList,Partition,Reason,ReqCPUS,ReqMem,ReqNodes,ReqTRES,Submit,State'
 FIELDS_INTEGER 	= ['AllocCPUS', 'AllocNodes', 'ReqCPUS', 'CPUTimeRaw', 'ReqNodes']
 FIELDS_LIST 		= []
 FIELDS 			= 'User,Account,AllocCPUS,AllocNodes,AllocTRES,AssocID,AveCPU,\
@@ -299,7 +299,7 @@ class SlurmJob():
 				stderr=subprocess.STDOUT)
 			if process:
 				output = process.stdout.read().split(b'\n')
-				if len(output) > 3:
+				if len(output) > 1:
 					for line in output[1:-1]:
 						outdata = self.set_rowsummary(stdout = line, expand_nodes = expand_nodes)
 						if outdata:
@@ -343,6 +343,42 @@ class SlurmJob():
 		job_cmd = f"sacct -X -p -a --partition={partition} --state={state} --format={FIELDS_SUMMARY}"
 		jobs = self.get_by(job_cmd, expand_nodes)
 		return jobs
+
+	def get_byaccountcode(self, account_code = None):
+		""" Return all the pending and running jobs for an account_code """
+
+		expand_nodes = False
+		job_cmd = f"sacct -X -p -a -A {account_code} --state=r,pd --format={FIELDS_SUMMARY}"
+		jobs = self.get_by(job_cmd, expand_nodes)
+		return jobs
+
+	def tres_to_gpu(self, tres_string):
+		""" Extract gpu number from a AllocTRES / ReqTRES string """
+		if "gres/gpu" in tres_string:
+			fields = tres_string.split("gres/gpu=")
+			if len(fields) > 1:
+				if "," in fields[1]:
+					return int(fields[1].split(",")[1])
+			return 0
+		else:
+			return 0
+
+	def get_reason(self, jobid = None):
+
+		expand_nodes = False
+		job_cmd = f"squeue -j {jobid} --format='%r' -P"
+		jobreason = False
+		try:
+			process = subprocess.Popen(job_cmd, shell=True,
+                stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT)
+			if process:
+				output = process.stdout.read().split(b'\n')
+				if len(output) == 3:
+					return output[1].decode('utf-8')
+		except Exception as e:
+			print(e)
+		return jobreason
 
 	def get_details(self, jobid = None):
 		""" Return the top-level information for a specific job - this only
