@@ -358,7 +358,7 @@ class SlurmJob():
 			fields = tres_string.split("gres/gpu=")
 			if len(fields) > 1:
 				if "," in fields[1]:
-					return int(fields[1].split(",")[1])
+					return int(fields[1].split(",")[0])
 			return 0
 		else:
 			return 0

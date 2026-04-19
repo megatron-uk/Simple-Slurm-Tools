@@ -23,6 +23,7 @@ import os
 import sys
 from lib.slurmjob import SlurmJob
 from lib.slurmlimits import SlurmLimits
+from lib.slurmnotes import notes
 
 ####################################################################
 #
@@ -65,7 +66,11 @@ class colour:
 			self.UNDERLINE = ''
 			self.END = ''
 
+# Colour class
 c = colour()
+
+# List of notes
+notes_list = []
 
 def banner():
 	print(c.BOLD + "Slurm Project Account Summary" + c.END)
@@ -79,13 +84,13 @@ def banner():
 def help():
 	pass
 
-def showAccountSummary(slurmlimits = None):
+def showAccountSummary(account_code = None, slurmlimits = None):
 
 	limits = sl.getAccountLimits()
 	freeparts = sl.getAccountFreePartitions()
 	paidparts = sl.getAccountPaidPartitions()
 
-	print(c.UNDERLINE + "Slurm Account Summary" + c.END)
+	print(c.UNDERLINE + f"Slurm Account Summary" + c.END)
 	print(f"Account Code: {sl.account_code}")
 	print("")
 	print(c.UNDERLINE + "Partitions" + c.END)
@@ -99,49 +104,59 @@ def showAccountSummary(slurmlimits = None):
 		print(c.RED + "Warning: This account does not have access to PAID partitions" + c.END)
 
 	print("")
-	print(c.UNDERLINE + "Resource Limits" + c.END)
+	print(c.UNDERLINE + f"Resource Limits" + c.END)
 
 	if len(limits.keys()) == 0:
 		print(c.RED + "Warning: There are no resource limits found in Slurm for this account_code" + c.END)
 	else:
-		if "MaxJobs" in limits:
-			print(f"- MaxJobs:	{limits['MaxJobs']}	- Maximum number of running jobs *per user* for this account_code")
+		if ("MaxJobs" in limits) and (limits['MaxJobs']):
+			print(f"MaxJobs:	" + c.GREEN + f"{limits['MaxJobs']:9d}" + c.END + " - Maximum number of running jobs *per user* for this account_code")
 		else:
-			print("- MaxJobs:	Undefined - Maximum number of running jobs *per user* for this account_code")
+			print("MaxJobs:	" + c.BOLD + "Undefined" + c.END + " - Maximum number of running jobs *per user* for this account_code. " + c.RED + "z" + c.END)
+			notes_list.append('z')
 
-		if "MaxSubmit" in limits:
-			print(f"- MaxSubmit:	{limits['MaxSubmit']}	- Maximum number of jobs this account_code can have pending")
+		if ("MaxSubmit" in limits) and (limits['MaxSubmit']):
+			print(f"MaxSubmit:	" + c.GREEN + f"{limits['MaxSubmit']:9d}" + c.END + " - Maximum number of jobs *per user* that can be either running *or* pending for this account_code")
 		else:
-			print("- MaxSubmit:	Undefined - Maximum number of jobs this account_code can have pending")
+			print("MaxSubmit:	" + c.BOLD + "Undefined" + c.END + " - Maximum number of jobs *per user* that can be submitted and pending to this account. " + c.RED + "z" + c.END)
+			notes_list.append('z')
 
-		if "GrpWall" in limits:
-			print(f"- GrpWall:	{limits['GrpWall']}	- Maximum aggregate runtime by all jobs under this account_code")
+		if ("GrpJobs" in limits) and (limits['GrpJobs']):
+			print(f"GrpJobs:	" + c.GREEN + f"{limits['GrpJobs']:9d}" + c.END + " - Aggregate number of aggregate running jobs for *all users* under this account_code")
 		else:
-			print("- GrpWall:	Undefined - Maximum aggregate runtime by all jobs under this account_code")
+			print("GrpJobs:	" + c.BOLD + "Undefined" + c.END + " - Aggregate number of running jobs for *all users* under this account_code. " + c.RED + "z" + c.END)
+			notes_list.append('z')
 
-		if "GrpJobs" in limits:
-			print(f"- GrpJobs:	{limits['GrpJobs']}	- Maximum number of aggregate running jobs under this account_code")
+		if ("GrpSubmit" in limits) and (limits['GrpSubmit']):
+			print(f"GrpSubmit:  " + c.GREEN + f"{limits['GrpJobs']:9d}" + c.END + " - Aggregate number of jobs allowed in either running *or* pending state for *all users* under this account_code")
 		else:
-			print("- GrpJobs:	Undefined - Maximum number of aggregate running jobs under this account_code")
+			print("GrpSubmit:	" + c.BOLD + "Undefined" + c.END + " - Aggregate number of jobs allowed in either running *or* pending state for *all users* under this account_code. " + c.RED + "z" + c.END)
+			notes_list.append('z')
 
-		if "cores" in limits:
-			print(f"- Cores:	{limits['cores']}	- Maximum number of CPU cores which can be used simultaneously by this account code")
+		if ("cores" in limits) and (limits['cores']):
+			print(f"Cores:		" + c.GREEN + f"{limits['cores']:9d}" + c.END + " - Maximum number of CPU cores which can be used simultaneously by this account code")
 		else:
-			print("- Cores:		Undefined - Maximum number of CPU cores which can be used simultaneously by this account code")
+			print("Cores:		" + c.BOLD + "Undefined" + c.END + " - Maximum number of CPU cores which can be used simultaneously by this account code. " + c.RED + "z" + c.END)
+			notes_list.append('z')
 
-		if "gpu" in limits:
-			print(f"- GPU:		{limits['gpu']}	- Maximum number of GPU cards which can be used simultaneously by this account code")
+		if ("gpu" in limits) and (limits['gpu']):
+			print(f"GPU:		" + c.GREEN + f"{limits['gpu']:9d}" + c.END + " - Maximum number of GPU cards which can be used simultaneously by this account code")
 		else:
-			print("- GPU:		Undefined - Maximum number of GPU cards which can be used simultaneously by this account code")
+			print("GPU:		" + c.BOLD + "Undefined" + c.END + " - Maximum number of GPU cards which can be used simultaneously by this account code ." + c.RED + "z" + c.END)
+			notes_list.append('z')
 
-		if "ram" in limits:
-			print(f"- RAM:		{limits['ram']} - Maximum amount of RAM (in MBytes) which can be used simultaneously by this account code")
+		if ("ram" in limits) and (limits['ram']):
+			print(f"RAM:		" + c.GREEN + f"{limits['ram']:9d}" + c.END + " - Maximum amount of RAM (in MBytes) which can be used simultaneously by this account code")
 		else:
-			print(f"- RAM:		Undefined - Maximum amount of RAM (in MBytes) which can be used simultaneously by this account code")
+			print(f"RAM:		" + c.BOLD + "Undefined" + c.END + " - Maximum amount of RAM (in MBytes) which can be used simultaneously by this account code. " + c.RED + "z" + c.END)
+			notes_list.append('z')
+
 
 def showJobSummary(slurmlimits = None, slurmjobs = None):
 	print("")
 	print(c.UNDERLINE + "Slurm Job Summary" + c.END)
+
+	sj = SlurmJob()
 
 	jobs_running = 0
 	jobs_pending = 0
@@ -160,7 +175,7 @@ def showJobSummary(slurmlimits = None, slurmjobs = None):
 	ram_total = 0
 
 	if len(slurmjobs) == 0:
-		print(f"There are no jobs running for this account_code")
+		print(f"There are no running or pending jobs for this account_code")
 		return
 
 	# Work out job statistics
@@ -173,6 +188,8 @@ def showJobSummary(slurmlimits = None, slurmjobs = None):
 			cores_total += j['ReqCPUS']
 			ram_pending += int(j['TotalMemory'])
 			ram_total += int(j['TotalMemory'])
+			gpu_pending += sj.tres_to_gpu(j['ReqTRES'])
+			gpu_total += sj.tres_to_gpu(j['ReqTRES'])
 
 		if j['State'] == "RUNNING":
 			jobs_running += 1
@@ -180,19 +197,26 @@ def showJobSummary(slurmlimits = None, slurmjobs = None):
 			cores_total += j['AllocCPUS']
 			ram_running += int(j['TotalMemory'])
 			ram_total += int(j['TotalMemory'])
+			gpu_running += sj.tres_to_gpu(j['AllocTRES'])
+			gpu_total += sj.tres_to_gpu(j['AllocTRES'])
 
 	# Conditional formatting for Job numbers
 	jobs_running_s = jobs_running
 	jobs_pending_s = jobs_pending
 	jobs_total_s = jobs_total
-	if 'MaxSubmit' in limits.keys():
-		if jobs_pending >= limits['MaxSubmit']:
-			jobs_pending_s = c.RED + f"{jobs_pending:13d}" + c.END
-		else:
-			jobs_pending_s = c.GREEN + f"{jobs_pending:13d}" + c.END
+	jobs_pending_s = c.GREEN + f"{jobs_pending:13d}  " + c.END
+	if ('GrpSubmit' in limits.keys()) and (limits['GrpSubmit']):
+		if jobs_pending >= limits['GrpSubmit']:
+			jobs_pending_s = c.RED + f"{jobs_pending:13d} f" + c.END
+			notes_list.append('f')
 
-	jobs_running_s = c.GREEN + f"{jobs_running:13d}" + c.END
-	jobs_total_s = c.GREEN + f"{jobs_total:13d}" + c.END
+	jobs_running_s = c.GREEN + f"{jobs_running:13d}  " + c.END
+	if ("GrpJobs" in limits.keys()) and (limits['GrpJobs']):
+		if jobs_running >= limits['GrpJobs']:
+			jobs_running_s = c.RED + f"{jobs_running:13d} e" + c.END 
+			notes_list.append('e')
+
+	jobs_total_s = c.GREEN + f"{jobs_total:13d}  " + c.END
 
 	# Conditional formatting for CPU core stats
 	cores_running_s = cores_running
@@ -200,17 +224,19 @@ def showJobSummary(slurmlimits = None, slurmjobs = None):
 	cores_total_s = cores_total
 	if 'cores' in limits.keys():
 		if cores_running >= limits['cores']:
-			cores_running_s = c.RED + f"{cores_running:13d}" + c.END
+			cores_running_s = c.RED + f"{cores_running:13d} a" + c.END
+			notes_list.append('a')
 		else:
-			cores_running_s = c.GREEN + f"{cores_running:13d}" + c.END
+			cores_running_s = c.GREEN + f"{cores_running:13d}  " + c.END
 		if cores_pending >= limits['cores']:
-			cores_pending_s = c.RED + f"{cores_pending:13d}" + c.END
+			cores_pending_s = c.RED + f"{cores_pending:13d} b" + c.END
+			notes_list.append('b')
 		else:
-			cores_pending_s = c.GREEN + f"{cores_pending:13d}" + c.END
+			cores_pending_s = c.GREEN + f"{cores_pending:13d}  " + c.END
 		if (cores_total) >= limits['cores']:
-			cores_total_s = c.RED + f"{cores_total:13d}" + c.END
+			cores_total_s = c.RED + f"{cores_total:13d}  " + c.END
 		else:
-			cores_total_s = c.GREEN + f"{cores_total:13d}" + c.END
+			cores_total_s = c.GREEN + f"{cores_total:13d}  " + c.END
 
 	# Conditional formatting for GPU card stats
 	gpu_running_s = gpu_running
@@ -218,23 +244,25 @@ def showJobSummary(slurmlimits = None, slurmjobs = None):
 	gpu_total_s = gpu_total
 	if 'gpu' in limits.keys():
 		if gpu_running >= limits['gpu']:
-			gpu_running_s = c.RED + f"{gpu_running:13d}" + c.END
+			gpu_running_s = c.RED + f"{gpu_running:13d} c" + c.END
+			notes_list.append('c')
 		else:
-			gpu_running_s = c.GREEN + f"{gpu_running:13d}" + c.END
+			gpu_running_s = c.GREEN + f"{gpu_running:13d}  " + c.END
 		if gpu_pending >= limits['gpu']:
-			gpu_pending_s = c.RED + f"{gpu_pending:13d}" + c.END
+			gpu_pending_s = c.RED + f"{gpu_pending:13d} d" + c.END
+			notes_list.append('d')
 		else:
-			gpu_pending_s = c.GREEN + f"{gpu_pending:13d}" + c.END
+			gpu_pending_s = c.GREEN + f"{gpu_pending:13d}  " + c.END
 		if gpu_total >= limits['gpu']:
-			gpu_total_s = c.RED + f"{gpu_total:13d}" + c.END
+			gpu_total_s = c.RED + f"{gpu_total:13d}  " + c.END
 		else:
-			gpu_total_s = c.GREEN + f"{gpu_total:13d}" + c.END
+			gpu_total_s = c.GREEN + f"{gpu_total:13d}  " + c.END
 
-	print(c.UNDERLINE + "Metric" + c.END + "       " + c.UNDERLINE + "Running" + c.END + "       " + c.UNDERLINE + "Pending" + c.END + "         " + c.UNDERLINE + "Total"+ c.END)
+	print(c.UNDERLINE + "Metric" + c.END + "       " + c.UNDERLINE + "Running" + c.END + " ?       " + c.UNDERLINE + "Pending" + c.END + " ?         " + c.UNDERLINE + "Total"+ c.END + " ?")
 	print(f"Jobs   {jobs_running_s} {jobs_pending_s} {jobs_total_s}")
 	print(f"Cores  {cores_running_s} {cores_pending_s} {cores_total_s}")
 	print(f"GPU    {gpu_running_s} {gpu_pending_s} {gpu_total_s}")
-	print(f"RAM    {ram_running:13d} {ram_pending:13d} {ram_total:13d}")
+	print(f"RAM    {ram_running:13d}   {ram_pending:13d}   {ram_total:13d}")
 
 def showPendingSummary(slurmjobs):
 
@@ -260,6 +288,21 @@ def showPendingSummary(slurmjobs):
 			d = pending_reasons[reason]
 			print(c.RED + f"{d['jobs']}" + c.END + " jobs pending due to [" + c.RED + f"{reason}" + c.END + "]")
 
+def showNotes():
+
+	if len(notes_list) == 0:
+		return
+
+	print("")
+	print(c.UNDERLINE + "Explanation" + c.END)
+
+	notes_list.sort()
+	added = []
+	for n in notes_list:
+		if n not in added:
+			print(c.RED + f"{n}." + c.END + f" {notes[n]}")
+			added.append(n)
+
 if __name__ == "__main__":
 
 	parser = argparse.ArgumentParser("sproject")
@@ -279,12 +322,15 @@ if __name__ == "__main__":
 		sj = SlurmJob()
 		jobs = sj.get_byaccountcode(account_code = args.account)
 
+		notes_list = []
 		# For each job check state
-		showAccountSummary(sl)
+		showAccountSummary(account_code = args.account, slurmlimits = sl)
 
 		showJobSummary(limits, jobs)
 
 		showPendingSummary(jobs)
+
+		showNotes()
 
 		sys.exit(0)
 	else:

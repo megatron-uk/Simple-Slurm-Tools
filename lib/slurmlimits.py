@@ -28,11 +28,6 @@ import datetime
 #
 #############################################################
 
-PENDING_REASONS = {
-	
-
-}
-
 class SlurmLimits():
 
 	def __init__(self, account_code):
@@ -151,7 +146,11 @@ class SlurmLimits():
 								'MaxTRESMins' : fields[16],
 								'QOS' : fields[17],
 								'Def QOS' : fields[18],
+								'ram' : None
 							}
+							for k in self.limits.keys():
+								if self.limits[k] == '':
+									self.limits[k] = None
 							for k in ["share", "priority", "GrpTRESMins", "MaxJobs", "MaxSubmit", "MaxWall", "MaxTRESMins"]:
 								try:
 									self.limits[k] = int(self.limits[k])
