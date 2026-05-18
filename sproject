@@ -36,7 +36,7 @@ AUTHOR	= "John Snowdon"
 URL		= "https://github.com/megatron-uk/Simple-Slurm-Tools"
 
 def isxterm():
-	if os.environ['TERM'] in ['xterm-256color']:
+	if os.environ['TERM'] in ['xterm', 'xterm-256color']:
 		return True
 	else:
 		return False
