@@ -122,15 +122,15 @@ def showAccountSummary(account_code = None, slurmlimits = None):
 			notes_list.append('z')
 
 		if ("GrpJobs" in limits) and (limits['GrpJobs']):
-			print(f"GrpJobs:	" + c.GREEN + f"{limits['GrpJobs']:9d}" + c.END + " - Aggregate number of aggregate running jobs for *all users* under this account_code")
+			print(f"GrpJobs:	" + c.GREEN + f"{limits['GrpJobs']:9d}" + c.END + " - Aggregate number of running jobs for *all users* under this account_code")
 		else:
 			print("GrpJobs:	" + c.BOLD + "Undefined" + c.END + " - Aggregate number of running jobs for *all users* under this account_code. " + c.RED + "z" + c.END)
 			notes_list.append('z')
 
 		if ("GrpSubmit" in limits) and (limits['GrpSubmit']):
-			print(f"GrpSubmit:  " + c.GREEN + f"{limits['GrpJobs']:9d}" + c.END + " - Aggregate number of jobs allowed in either running *or* pending state for *all users* under this account_code")
+			print(f"GrpSubmit:	" + c.GREEN + f"{limits['GrpSubmit']:9d}" + c.END + " - Aggregate number of jobs in running *or* pending state for *all users* under this account_code")
 		else:
-			print("GrpSubmit:	" + c.BOLD + "Undefined" + c.END + " - Aggregate number of jobs allowed in either running *or* pending state for *all users* under this account_code. " + c.RED + "z" + c.END)
+			print("GrpSubmit:	" + c.BOLD + "Undefined" + c.END + " - Aggregate number of jobs in running *or* pending state for *all users* under this account_code. " + c.RED + "z" + c.END)
 			notes_list.append('z')
 
 		if ("cores" in limits) and (limits['cores']):
