@@ -344,11 +344,14 @@ class SlurmJob():
 		jobs = self.get_by(job_cmd, expand_nodes)
 		return jobs
 
-	def get_byaccountcode(self, account_code = None):
+	def get_byaccountcode(self, account_code = None, tasks = False):
 		""" Return all the pending and running jobs for an account_code """
 
 		expand_nodes = False
-		job_cmd = f"sacct -X -p -a -A {account_code} --state=r,pd --format={FIELDS_SUMMARY}"
+		if tasks:
+			job_cmd = f"sacct -X -p -a -A {account_code} --array --state=r,pd --format={FIELDS_SUMMARY}"
+		else:
+			job_cmd = f"sacct -X -p -a -A {account_code} --state=r,pd --format={FIELDS_SUMMARY}"
 		jobs = self.get_by(job_cmd, expand_nodes)
 		return jobs
 

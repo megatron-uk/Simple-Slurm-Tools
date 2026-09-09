@@ -1,0 +1,354 @@
+#!/usr/bin/env python3
+
+import argparse
+import os
+import subprocess
+import sys
+
+SYSTEM_USERS = [ 'root', 'nobody', 'polkitd', 'dbus', 'munge', 'rpc', 'rpcuser', 'rtkit', 'prometh+', 'slurm', 'chrony' ]
+SYSTEM_CPUS = 256
+
+CONFIG = {
+	'verbose' : True,
+	'show_slurm_users' : True,
+}
+
+# Path to your SSH key
+SSH_KEY = "/.ssh/id_comet"
+
+def isxterm():
+	if os.environ['TERM'] in ['xterm', 'xterm-256color']:
+		return True
+	else:
+		return False
+
+class colour:
+	def __init__(self):
+		if isxterm():
+			self.PURPLE = '\033[95m'
+			self.CYAN = '\033[96m'
+			self.DARKCYAN = '\033[36m'
+			self.BLUE = '\033[94m'
+			self.GREEN = '\033[92m'
+			self.YELLOW = '\033[93m'
+			self.RED = '\033[91m'
+			self.BOLD = '\033[1m'
+			self.UNDERLINE = '\033[4m'
+			self.END = '\033[0m'
+		else:
+			self.PURPLE = ''
+			self.CYAN = ''
+			self.DARKCYAN = ''
+			self.BLUE = ''
+			self.GREEN = ''
+			self.YELLOW = ''
+			self.RED = ''
+			self.BOLD = ''
+			self.UNDERLINE = ''
+			self.END = ''
+
+# Colour class
+c = colour()
+
+
+def squeue_for_node(nodename = ""):
+	""" Get running job info for this particular node """
+
+	print("")
+	print(c.BOLD + f"2. Retrieving current squeue data" + c.END)
+
+	data = []
+
+	if nodename:
+		cmd = f'squeue --nodelist={nodename} --format="%.9A %.16a %.16u %.16j %.4C %.11M %.11L %.24N %r"'
+		process = subprocess.Popen(cmd, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+		if process:
+			process.wait()
+			if process.returncode != 0:
+				print(c.RED + "Error - squeue command failed" + c.END)
+				print(process.returncode)
+				print(process.stderr.read().decode())
+				sys.exit(1)
+			output = process.stdout.read().decode("utf-8")
+			output = output.split('\n')
+			if len(output) > 1:
+				row_num = 0
+				for row in output:
+					cols = ' '.join(row.split())
+					if row_num > 0:
+						cols = cols.split()
+						if len(cols) > 1:
+							data.append(cols)
+					row_num += 1
+				print(c.GREEN + f"Ok - {len(data)} Slurm jobs on this node" + c.END)
+			else:
+				print(c.RED + "Error - no squeue information retrieved" + c.END)
+				sys.exit(1)
+	return data
+
+def sinfo_for_node(nodename = ""):
+	""" Get sinfo status for this particular node """
+
+	print("")
+	print(c.BOLD + f"1. Retrieving current sinfo data" + c.END)
+
+	data = {
+		'mem_free' : 0,
+		'mem_total' : 0,
+		'state' : None,
+		'cpu_alloc' : 0,
+		'cpu_idle' : 0,
+		'cpu_other' : 0,
+		'cpu_total' : 0,
+	}
+
+	if nodename:
+		# Run sinfo to see what Slurm thinks is the state of cpu cores on this node
+		cmd = f'sinfo -o "%e %m %a %C" -n {nodename}'
+		process = subprocess.Popen(cmd, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+		if process:
+			process.wait()
+			if process.returncode != 0:
+				print(c.RED + "Error - sinfo command failed" + c.END)
+				print(process.returncode)
+				print(process.stderr.read().decode())
+				sys.exit(1)
+			output = process.stdout.read().decode("utf-8")
+			output = output.split('\n')
+			if len(output) > 2:
+				data_line = output[1]
+				cols = data_line.split(' ')
+				data['mem_free'] = int(cols[0])
+				data['mem_total'] = int(cols[1])
+				data['state'] = cols[2]
+
+				# Split the cpu column into fields for alloc/idle/other/total
+				cpu_cols = cols[3].split('/')
+				data['cpu_alloc'] = int(cpu_cols[0])
+				data['cpu_idle'] = int(cpu_cols[1])
+				data['cpu_other'] = int(cpu_cols[2])
+				data['cpu_total'] = int(cpu_cols[3])
+				
+				print(c.GREEN + "Ok" + c.END)
+			else:
+				print(c.RED + "Error - no sinfo data retrieved" + c.END)
+				sys.exit(1)
+	return data
+
+def psinfo_for_node(nodename = ""):
+	""" Return the current process list (ps) for everything running on this node - you need SSH keys set up, password interactive is not supported """
+
+	print("")
+	print(c.BOLD + f"3. Retrieving process list via ssh (please wait)" + c.END)
+
+	ps_data = []
+
+	if os.path.exists(os.environ['HOME'] + SSH_KEY):
+		pass
+	else:
+		print(c.RED + f"ERROR! You must have an SSH key named {os.environ['HOME']}{SSH_KEY} configured to continue" + c.END)
+		sys.exit(1)
+
+	cmd = f"ssh -tt -i {os.environ['HOME']}{SSH_KEY} {nodename} ps aux"
+	process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+	if process:
+		if process.returncode != 0 and process.returncode != None:
+			print(c.RED + "Error - SSH command failed" + c.END)
+			print(process.returncode)
+			print(process.stderr.read().decode())
+			sys.exit(1)
+		output = process.stdout.read().decode("utf-8")
+		output = output.split('\n')
+		if len(output) > 2:
+			row_num = 0
+			for row in output:
+				if row_num > 0:
+					ps_row = ' '.join(row.split())
+					cols = ps_row.split(' ')
+					if len(cols) > 10:
+						ps_data.append(cols)
+				row_num += 1
+			print(c.GREEN + f"Ok - {len(ps_data)} processes on this node" + c.END)
+		else:
+			print(c.RED + "Error - no process data retrieved via ssh" + c.END)
+			sys.exit(1)
+
+	return ps_data
+
+def process_data(nodename, sinfo_data, squeue_data, ps_data):
+
+	print("")
+	print(c.BOLD + f"4. Analysing current process and user information" + c.END)
+
+	cpu_sum = 0
+	users = []
+	slurm_users = []
+	bad_users = []
+	bad_users_ps = {}
+	bad_users_resources = {
+		'processes' : 0,
+		'cpu_percent' : 0.0,
+		'memory_percent' : 0.0,
+		'total_processes' : 0,
+		'vss_bytes' : 0,
+		'rss_bytes' : 0,
+	}
+	slurm_users_ps = {}
+
+	# Extract list of distinct users and their running processes
+	for ps_row in ps_data:
+		user = ps_row[0]
+		if user not in SYSTEM_USERS:
+			if user not in users:
+				users.append(user)
+			cpu_val = float(ps_row[2])
+			cpu_sum += cpu_val
+
+	users.sort()
+
+	##############################################################
+
+	print("")
+	print(c.UNDERLINE + "System Resources" + c.END)
+	print(f"Total of {cpu_sum:.1f}% CPU time being used")
+	print(f"Equivalent to {(cpu_sum / 100):.0f} cores")
+	print(f"Slurm indicated {sinfo_data['cpu_alloc']} cores were allocated")
+	if sinfo_data['cpu_alloc'] < (cpu_sum / 100):
+		print(c.RED + "")
+		print("WARNING!!! WARNING!!! WARNING!!!")
+		print("There is more CPU utilisation by user processes than cores allocated by Slurm!")
+		print("This _may_ indicate orphaned jobs still using compute, Slurm is over-allocating resources, or some other non-Slurm initiated application is running!")
+		print("WARNING!!! WARNING!!! WARNING!!!")
+		print("" + c.END)
+	else:
+		print(c.GREEN + "Ok - CPU allocation is less than or equal to that expected by Slurm" + c.END)
+
+	###############################################################
+
+	print("")
+	print(c.UNDERLINE + "Users" + c.END)
+
+	# Extract list of users who *should* have running Slurm jobs
+	for squeue_row in squeue_data:
+		user = squeue_row[2]
+		if user not in slurm_users:
+			if CONFIG['show_slurm_users']:
+				print(f"- Adding Slurm job user {user}")
+			slurm_users.append(user)
+
+	# Make a list of anyone in the process list who does not have a Slurm job
+	for user in users:
+		if user not in slurm_users:
+			bad_users.append(user)
+
+	print(f"Total users with running processes: {len(users)}")
+	print(f"Total users who have Slurm jobs: {len(slurm_users)}")
+
+	if len(slurm_users) > 0:
+
+		print("")
+		print(c.GREEN + "Slurm User Process Summary" + c.END)
+		print("Username | Total Processes | Total CPU % | Total RAM % | VSS Bytes            | RSS Bytes            | Other")
+		print("---------|-----------------|-------------|-------------|----------------------|----------------------|-----------")
+
+		# Summarise processes/resource use by all bad users
+		for ps_row in ps_data:
+			user = ps_row[0]
+			if user in slurm_users:
+				if user in slurm_users_ps:
+					slurm_users_ps[user]['processes'] += 1
+					slurm_users_ps[user]['cpu_percent'] += float(ps_row[2])
+					slurm_users_ps[user]['memory_percent'] += float(ps_row[3])
+					slurm_users_ps[user]['vss_bytes'] += int(ps_row[4])
+					slurm_users_ps[user]['rss_bytes'] += int(ps_row[5])
+				else:
+					ps = {
+                        'user' : user,
+                        'processes' : 1,
+                        'cpu_percent' : float(ps_row[2]),
+                        'memory_percent' : float(ps_row[3]),
+                        'vss_bytes' : int(ps_row[4]),
+                        'rss_bytes' : int(ps_row[5]),
+                    }
+					slurm_users_ps[user] = ps
+		k_list = list(slurm_users_ps.keys())
+		k_list.sort()
+		for k in k_list:
+			if CONFIG['verbose']:
+				print(f"{k:8s} | {slurm_users_ps[k]['processes']:15d} | {int(slurm_users_ps[k]['cpu_percent']):10d}% | {int(slurm_users_ps[k]['memory_percent']):10d}% | {slurm_users_ps[k]['vss_bytes']:20d} | {slurm_users_ps[k]['rss_bytes']:20d} |")
+
+
+	if len(bad_users) > 0:
+		print(c.RED + "")
+		print("WARNING!!! WARNING!!! WARNING!!!")
+		print(f"There are {len(bad_users)} users with running processes who should NOT be on this node!" + c.END)
+
+		# Summarise processes/resource use by all bad users
+		for ps_row in ps_data:
+			user = ps_row[0]
+			if user in bad_users:
+				if user in bad_users_ps:
+					bad_users_ps[user]['processes'] += 1
+					bad_users_ps[user]['cpu_percent'] += float(ps_row[2])
+					bad_users_ps[user]['memory_percent'] += float(ps_row[3])
+					bad_users_ps[user]['vss_bytes'] += int(ps_row[4])
+					bad_users_ps[user]['rss_bytes'] += int(ps_row[5])
+				else:
+					bad_ps = {
+						'user' : user,
+						'processes' : 1,
+						'cpu_percent' : float(ps_row[2]),
+						'memory_percent' : float(ps_row[3]),
+						'vss_bytes' : int(ps_row[4]),
+						'rss_bytes' : int(ps_row[5]),
+					}
+					bad_users_ps[user] = bad_ps
+
+		if CONFIG['verbose']:
+			print("")
+			print(c.RED + "Bad User Process Summary" + c.END)
+			print("Username | Total Processes | Total CPU % | Total RAM % | VSS Bytes            | RSS Bytes            | Other")
+			print("---------|-----------------|-------------|-------------|----------------------|----------------------|-----------")
+		k_list = list(bad_users_ps.keys())
+		k_list.sort()
+		for k in k_list:
+			if CONFIG['verbose']:
+				if bad_users_ps[k]['cpu_percent'] > 0:
+					print(f"{k:8s} | {bad_users_ps[k]['processes']:15d} | {int(bad_users_ps[k]['cpu_percent']):10d}% | {int(bad_users_ps[k]['memory_percent']):10d}% | {bad_users_ps[k]['vss_bytes']:20d} | {bad_users_ps[k]['rss_bytes']:20d} | " + c.RED + f"Using {bad_users_ps[k]['cpu_percent']:.1f}% CPU not allocated by Slurm!!!" + c.END)
+				else:
+					print(f"{k:8s} | {bad_users_ps[k]['processes']:15d} | {int(bad_users_ps[k]['cpu_percent']):10d}% | {int(bad_users_ps[k]['memory_percent']):10d}% | {bad_users_ps[k]['vss_bytes']:20d} | {bad_users_ps[k]['rss_bytes']:20d} |")
+			bad_users_resources['processes'] += bad_users_ps[k]['processes']
+			bad_users_resources['cpu_percent'] += bad_users_ps[k]['cpu_percent']
+			bad_users_resources['memory_percent'] += bad_users_ps[k]['memory_percent']
+			bad_users_resources['vss_bytes'] += bad_users_ps[k]['vss_bytes']
+			bad_users_resources['rss_bytes'] += bad_users_ps[k]['rss_bytes']
+
+		print("")
+		print("Total Processes | Total CPU % | Total RAM % | VSS Bytes            | RSS Bytes           ")
+		print("----------------|-------------|-------------|----------------------|---------------------")
+		print(f"{bad_users_resources['processes']:15d} | {int(bad_users_resources['cpu_percent']):10d}% | {int(bad_users_resources['memory_percent']):10d}% | {bad_users_resources['vss_bytes']:20d} | {bad_users_resources['rss_bytes']:20d}")
+		print("")
+
+		print(c.RED + "WARNING!!! WARNING!!! WARNING!!!")
+		print("" + c.END)
+	else:
+		print(c.GREEN + "Ok - no non-Slurm managed user processes found" + c.END)
+
+if __name__ == "__main__":
+
+	parser = argparse.ArgumentParser("slurmps")
+	parser.add_argument("nodename", help="The name of a Slurm compute node to query process information on (e.g compute001).", type=str)
+
+	args = parser.parse_args()
+
+	if args.nodename:
+		nodename = args.nodename
+	else:
+		print("You must supply the name of compute node")
+		sys.exit(1)
+
+	sinfo = sinfo_for_node(nodename)
+	squeue = squeue_for_node(nodename)
+	psdata = psinfo_for_node(nodename)
+	process_data(nodename, sinfo, squeue, psdata)
+	sys.exit(0)

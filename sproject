@@ -320,7 +320,7 @@ if __name__ == "__main__":
 		p_parts = sl.getAccountPaidPartitions()
 
 		sj = SlurmJob()
-		jobs = sj.get_byaccountcode(account_code = args.account)
+		jobs = sj.get_byaccountcode(account_code = args.account, tasks = True)
 
 		notes_list = []
 		# For each job check state
