@@ -1,0 +1,20 @@
+#!/bin/bash
+
+AGE=$1
+
+if [ "$AGE" = "" ]
+then
+	echo "You must set the age for old processes in days"
+	exit 1
+fi
+
+echo ""
+echo "All procesess >= $AGE days"
+echo ""
+echo "Username PID      CPU CPU(sec) RSS   Elapsed     Start Command"
+echo "-------- -------  --- -------- ----- ----------- ----- -------"
+
+ps -af -o user,pid,pcpu,cputimes,rss,etime,stime,cmd | \
+	grep -v ^root | \
+	grep -E '([0-9]\-[0-9][0-9]:[0-9][0-9]:[0-9][0-9])' | \
+	awk -v age_var=${AGE} '$6 + 0 > age_var'
