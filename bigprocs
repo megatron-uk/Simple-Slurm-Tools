@@ -1,0 +1,51 @@
+#!/bin/bash
+
+MBYTES=$1
+let BYTES=($MBYTES * 1024 * 1024)
+let KBYTES=($MBYTES * 1024)
+
+if [ "$MBYTES" = "" ]
+then
+	echo "You must set the size for processes in Megabytes"
+	exit 1
+fi
+
+echo ""
+echo "All procesess >= $MBYTES Megabytes"
+echo "              >= $KBYTES Kilobytes"
+echo "              >= $BYTES Bytes"
+echo ""
+echo "Username PID      CPU CPU(sec) KByte Elapsed     Start Command"
+echo "-------- -------  --- -------- ----- ----------- ----- -------"
+
+while read L
+do
+	ps_size=`echo $L | awk '{print $5}'`
+	let ps_size=($ps_size * 1024)
+	if [ "$ps_size" -gt "$BYTES" ]
+	then
+		echo "$L"
+	fi
+done <<< "`ps -af -o user,pid,pcpu,cputimes,rss,etime,stime,cmd | \
+	grep -v ^root | \
+	grep -E '([0-9]\-[0-9][0-9]:[0-9][0-9]:[0-9][0-9])' | \
+	awk -v age_var=${AGE} '$6 + 0 > age_var'`"
+
+
+# Also look at /dev/shm
+while read u
+do
+	tot_size=0
+	while read f_size
+	do
+		let tot_size=($tot_size + $f_size)
+	done <<< "`ls -l /dev/shm | grep " $u " | awk '{print $5}'`"
+	
+	# If total > KBYTES
+	let tot_size=($tot_size / 1024)
+	if [ "$tot_size" -gt "$KBYTES" ]
+	then
+		printf "%8s /dev/shm 0.0        0 %d\t-\t-\t-\n" "$u" "$tot_size"
+	fi
+#$u /dev/shm 0 0 $tot_size 0 0 N/A\n"
+done <<< "`ls -l /dev/shm  | grep -v ^total | awk '{print $3}' | grep -v ^root | sort | uniq`"

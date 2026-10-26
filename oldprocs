@@ -17,4 +17,4 @@ echo "-------- -------  --- -------- ----- ----------- ----- -------"
 ps -af -o user,pid,pcpu,cputimes,rss,etime,stime,cmd | \
 	grep -v ^root | \
 	grep -E '([0-9]\-[0-9][0-9]:[0-9][0-9]:[0-9][0-9])' | \
-	awk -v age_var=${AGE} '$6 + 0 > age_var'
+	awk -v age_var=${AGE} '$6 + 0 >= age_var'
